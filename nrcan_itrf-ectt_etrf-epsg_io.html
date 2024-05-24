@@ -1,0 +1,250 @@
+<!-- fork from https://github.com/gunicsba/gunicsba.github.io/blob/88c377a7527a7fd410ed8d7b57a2efe0d42dea5a/nrcan_etrf_en.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NRCAN ETRF2000 converter</title>
+    <style>
+        body {
+            font-family: Arial, sans-serisf;
+            margin: 20px;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        h1, h3 { 
+            color: #333;
+            text-align: center;
+        }
+        .container {
+            max-width: 800px;
+            margin: auto;
+            padding: 10px;
+        }
+        textarea, input[type="text"], input[type="button"], input[type="submit"], button {
+            padding: 8px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            width: calc(100% - 20px);
+            box-sizing: border-box;
+        }
+        textarea {
+            resize: vertical;
+            background-color:  #d4e6f1 ;
+        }
+        button {
+            background-color:  #5499c7 ;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color:  #7fa92a ;
+        }
+                /* Placeholder style */
+        ::-webkit-input-placeholder {
+            color: #7fa92a;
+        }
+        :-moz-placeholder {
+            color: #7fa92a;
+        }
+        ::-moz-placeholder {
+            color: #7fa92a;
+        }
+        :-ms-input-placeholder {
+            color: #7fa92a;
+        }
+    </style>
+</head>
+<body> 
+    <body onload="clearFields()"> <!-- Appel de la fonction clearFields() lors du chargement de la page -->
+    <div id="problem"></div>
+    <div class="container">
+        <h1>NRCAN ITRF20 to EUROPE ETRF2000 Converter</h1>
+        <p>Open the <strong><a href="https://webapp.csrs-scrs.nrcan-rncan.gc.ca/geod/tools-outils/ppp.php" target="_blank">NRCAN</a></strong> site and do a Static ITRF calculation to get the ITRF position.</p>
+        <hr>
+        <p>In the NRCAN mail, please click on Summary and copy the whole thing here:</p>
+	<textarea id="NRCAN" rows="22" placeholder="The estimated coordinates ITRF20 xxxx-xx-xx for the xxxx-xx-xx-CT_nrcan.obs RINEX file are as follows:
+	Latitude Nxx° xx' xx.xxxx&quot; ± x.xxx m (xx%)
+	Longitude Wx° xx' xx.xxxx&quot; ± x.xxx m (xx%)
+	Ellipsoidal Height xx.xxx m ± x.xxx m (xx%)
+	[xx.xxxxxxxx,-x.xxxxxxxx,xx.xxx]
+
+	UTM Zone xx (North)
+	Northing xxxxxxxxx.xxx m
+	Easting xxxxxx.xxx m
+	Scale factor (point) x.xxxxxxxx
+	Scale factor (combined) x.xxxxxxxx
+	[xxxxxxxxx.xxx,xxxxxx.xxx,xx.xxx]
+	Cartesian coordinates
+	X xxxxxxxxx.xxx ± x.xxx m (xx%)
+	Y -xxxxx.xxx ± x.xxx m (xx%)
+	Z xxxxxxxxx.xxx ± x.xxx m (xx%)
+	[xxxxxxxxx.xxx,-xxxxx.xxx,xxxxxxxxx.xxx]
+
+	Orbits and Clocks Used: NRCan Rapid
+	GNSS Data: GPS & GLONASS
+	GRSxx ellipsoid used for (x,y,z) to (lat,lon,h) transformation"></textarea>
+        <br>
+        <button onclick="szamol()">1. Extract data!</button>
+        <form name="ecttform" method="post" action="https://www.epncb.oma.be/_productsservices/coord_trans/index.php">
+            <input type="hidden" id="epochtype" name="epochtype" value='date'><br>
+            <input type="hidden" id="from_frame_in" name="from_frame_in" value='ITRF2020'>
+            <input type="hidden" id="from_epoch_date" name="from_epoch_date" value=''>
+            <input type="hidden" id="to_frame_out" name="to_frame_out" value='ETRF2000'><br>
+            <label for="to_epoch_date">Epoch:</label>
+            <input type="text" id="to_epoch_date" name="to_epoch_date"  value='2000-01-01' readonly><br>
+            <label for="inputvalues">Cartesian coords:</label>
+            <input type="text" id="inputvalues" name="inputvalues" readonly><br>
+            <input type="hidden" id="transform_button" name="transform_button" value='Transform'><br><br>
+            <button type="button" onclick="checkCartesianCoords(event)">2. Click to display the ECTT result (ITRF20>ETRF2000) in a new page, copy the result</button>
+        </form>
+        <hr>
+        <h3>Paste here the ECTT result</h3>
+        <textarea id="xyzCoords" rows="5" placeholder="#_Station Frame  Epoch        X[m]          Y[m]          Z[m]    VX[m/yr] VY[m/yr] VZ[m/yr] &#10; &#10; &#10; centipedeBase ETRF2000 xxxx.xx  xxxxxxx.xxxx   -xxxxx.xxxx  xxxxxxx.xxxx      
+"></textarea><br>
+        <button onclick="convertXYZtoLatLongElev()">3. Convert XYZ to Lat Long Elev</button>
+        <hr>
+        <h3>Final Coordinates ETRF2000 EPSG:3971 <a href="https://epsg.io/7931" target="_blank">(Learn more)</a></h3>
+        <textarea id="convertedCoords" rows="2" placeholder="Final coordinates will appear here..." readonly></textarea><br>
+        <button onclick="exportFormData()">4. Export Form Data .txt for GNSS base declaration on CentipedeRTK</button> <!-- Nouveau bouton pour exporter les données -->
+        <button onclick="copyConvertedCoords()">5. Finaly, Copy Converted Coordinates for RTKbase to set coordinates</button>
+
+    </div>
+    <script>
+    // Fonction pour effacer les valeurs des champs texte lors du chargement de la page
+        function clearFields() {
+            // Effacer la valeur des zones de texte
+            document.getElementById('NRCAN').value = "";
+            document.getElementById('xyzCoords').value = "";
+            document.getElementById('convertedCoords').value = "";
+
+            // Effacer la valeur des champs de texte
+            document.getElementById('to_epoch_date').value = "";
+            document.getElementById('inputvalues').value = "";
+        }
+        function szamol(){
+            document.getElementById('problem').innerHTML ="";
+            var data = document.getElementById('NRCAN').value;
+            //is it ITRF20?
+            console.log(data.length);
+            console.log(data.replaceAll("ITRF20","").length);
+            if(data.length == data.replaceAll("ITRF20","").length){
+                console.log("so we didn't replace anything..");
+                alert(" No summary of NRCAN, please paste summary from NRCAN Static ITRF ");
+                return;
+            }
+            //Epoch?
+            const epochRe =/ITRF20 ([0-9-]{10}) /g;
+            var epoch = epochRe.exec(data)[1];
+            document.getElementById('from_epoch_date').value=epoch;
+            document.getElementById('to_epoch_date').value=epoch;
+
+            //Cartesian
+            const cartesianRe =/Cartesian coordinates.*\[(.*)\]/gs;
+            var cartesian = cartesianRe.exec(data)[1];
+
+            document.getElementById('inputvalues').value ='centipedeBase '+cartesian.replace(","," ").replace(","," ");
+        }
+
+        function convertXYZtoLatLongElev() {
+            var data = document.getElementById('xyzCoords').value.trim();
+            var regex = /\s*-?\d+\.\d+\s+(-?\d+\.\d+)\s+(-?\d+\.\d+)\s+(-?\d+\.\d+)/;
+            var matches = regex.exec(data);
+            if (matches && matches.length === 4) {
+                var x = parseFloat(matches[1]);
+                var y = parseFloat(matches[2]);
+                var z = parseFloat(matches[3]);
+
+                var url = `https://api.maptiler.com/coordinates/transform/${x},${y},${z}.json?s_srs=7930&t_srs=7931&key=749VV4spz9gZjolD9RPI`;
+
+                fetch(url)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.results && data.results.length > 0) {
+                            var result = data.results[0];
+                            document.getElementById('convertedCoords').value = `${result.y.toFixed(8)} ${result.x.toFixed(8)} ${result.z.toFixed(4)}`;
+                        } else {
+                            alert("Invalid response from MapTiler API.");
+                        }
+                    })
+                    .catch(error => {
+                        console.error("Error fetching data from MapTiler API:", error);
+                        alert("Error fetching data from MapTiler API.");
+                    });
+            } else {
+                alert("Invalid or empty format. Please copy a valid ECTT result.");
+            }
+        }
+
+        function copyConvertedCoords() {
+            var convertedCoords = document.getElementById('convertedCoords');
+            if (convertedCoords.value.trim() !== "") {
+                convertedCoords.select();
+                document.execCommand("copy");
+                alert("Coordinates copied! You can now paste them into your RTKbase. Settings > Main Service > Base coordinates");
+            } else {
+                alert("There are no coordinates to copy.");
+            }
+        }
+        function checkCartesianCoords() {
+    var cartesianCoords = document.getElementById('inputvalues').value.trim();
+    if (cartesianCoords === "") {
+        alert("Please paste a NRCAN summary and click on Extract data before.");
+        event.preventDefault(); // Bloque l'action par défaut du formulaire
+     } else {
+        var form = document.forms['ecttform'];
+        form.target = '_blank'; // Ouvre la page dans un nouvel onglet
+        form.submit(); // Soumet le formulaire pour ouvrir la nouvelle page
+    }
+}
+        function exportFormData() {
+            // Collecte des données du formulaire
+            var toEpochDate = document.getElementById('to_epoch_date').value;
+            var inputValues = document.getElementById('inputvalues').value;
+            var convertedCoords = document.getElementById('convertedCoords').value;
+
+            // Vérification si toutes les informations requises sont présentes
+            if (toEpochDate === "" || inputValues === "" || convertedCoords === "") {
+                alert("Please fill in all the required information before exporting.");
+                return;
+            }
+
+            // Récupération des données des zones de texte
+            var nrcanData = document.getElementById('NRCAN').value;
+            var xyzCoordsData = document.getElementById('xyzCoords').value;
+
+            // Création du contenu du fichier texte
+            var textContent = "To Epoch Date: " + toEpochDate + "\n";
+            textContent += "Input Values: " + inputValues + "\n";
+            textContent += "Converted Coordinates: " + convertedCoords + "\n\n";
+            textContent += "NRCAN Data:\n" + nrcanData + "\n\n";
+            textContent += "XYZ Coordinates Data:\n" + xyzCoordsData;
+
+            // Création d'un objet Blob contenant le contenu texte
+            var blob = new Blob([textContent], { type: "text/plain;charset=utf-8" });
+
+            // Création d'un nom de fichier avec date et heure actuelles
+            var currentDate = new Date();
+            var fileName = 'CentipedeRTK_ETRF_' + currentDate.getFullYear() + '-' + (currentDate.getMonth() + 1) + '-' + currentDate.getDate() + '_' + currentDate.getHours() + '-' + currentDate.getMinutes() + '-' + currentDate.getSeconds() + '.txt';
+
+            // Création d'un objet URL pour le Blob
+            var url = URL.createObjectURL(blob);
+
+            // Création d'un élément <a> pour le téléchargement du fichier
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = fileName; // Nom du fichier téléchargé avec date et heure
+            document.body.appendChild(a);
+            
+            // Déclenchement du clic sur l'élément <a> pour démarrer le téléchargement
+            a.click();
+
+            // Suppression de l'élément <a> et de l'URL de l'objet Blob après le téléchargement
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    </script> 
+</body>
+</html>
+
