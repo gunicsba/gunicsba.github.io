@@ -244,6 +244,11 @@ const blob = new Blob(
 <kml xmlns="http://www.opengis.net/kml/2.2">
   <Document>\n
     <Placemark>\n
+    <Style>
+    	<PolyStyle><color>80`+ Math.floor(Math.random()*4194303).toString(16)+
+	`</color><fill>1</fill><outline>1</outline>
+        </PolyStyle>
+    </Style>
       <name>` + document.getElementById('foldnev'+i).innerHTML +'</name>\n'+
 '      <Polygon>\n'+
 '         <tessellate>1</tessellate>\n'+
