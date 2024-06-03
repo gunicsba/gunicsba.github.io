@@ -26,9 +26,11 @@
 </style>
 
 <body>
-	<textarea id="EOVIN" width=40>Tedd a geoJSON-t ide</textarea><input type = "button" onclick = "szamol()" rows=5 cols=20 value = "Bemenet tablazatra alakitasa!"></input>
-	<input type = "button" onclick = "szamolfoldBulk1()" value = "Összes EOV átszámolása WGS84-re"></td>'
-	<input type = "button" onclick = "displayField1()" value = "Összes megjelenítése térképen"></td>'
+	<textarea id="EOVIN" width=70 height=10 placeholder="Tedd a geoJSON-t ide"></textarea><br>
+	<input type = "button" onclick = "szamol()" rows=5 cols=20 value = "Bemenet tablazatra alakitasa!"></input>->
+	<input type = "button" onclick = "szamolfoldBulk1()" value = "Összes EOV átszámolása WGS84-re"></td> Várj picit majd:
+	<input type = "button" onclick = "displayField1()" value = "Összes megjelenítése térképen"></td>/
+	<input type = "button" onclick = "downloadAsKML1()" value = "Összes letöltése KML-ben"></td>
 	  <br><br>
 <div id="map"></div>
 <div id="output"></div>
