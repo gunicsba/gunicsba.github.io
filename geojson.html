@@ -291,6 +291,16 @@ function transformData(i,id, eovx, eovy, eovh){
     console.error('Error:', error);
   });
 }
+
+	
+function downloadAsKML1(){
+	for(var i = 0; i < 300; i++){
+		if(document.getElementById('eov_'+i) != null)
+			downloadAsKML(i);
+	}
+}
+
+	
 function downloadAsKML(i){
 	downloadAsKML(i,false);
 }
