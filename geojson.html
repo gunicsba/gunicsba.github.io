@@ -1,3 +1,4 @@
+
 <html>
 
 <link
@@ -26,6 +27,8 @@
 
 <body>
 	<textarea id="EOVIN" width=40>Tedd a geoJSON-t ide</textarea><input type = "button" onclick = "szamol()" rows=5 cols=20 value = "Bemenet tablazatra alakitasa!"></input>
+	<input type = "button" onclick = "szamolfoldBulk1()" value = "Összes EOV átszámolása WGS84-re"></td>'
+	<input type = "button" onclick = "displayField1()" value = "Összes megjelenítése térképen"></td>'
 	  <br><br>
 <div id="map"></div>
 <div id="output"></div>
@@ -136,6 +139,48 @@ function szamolfold(j) {
 		}
 	}
 }
+
+function szamolfoldBulk1() {
+	console.log("SZamolFoldBulk1() ")
+	for(var i = 0; i < 300; i++){
+		if(document.getElementById('eov_'+i) != null)
+			szamolfoldBulk(i);
+	}
+}
+
+function szamolfoldBulk(j) {
+	console.log("Calculating for entry: " + j + "  " + document.getElementById('eov_'+j).value);
+	var lines = document.getElementById('eov_'+j).value.split("\n");
+
+	var jsonArray = [];
+
+	for(var i = 0; i <= lines.length;i++){
+		if( lines[i] == undefined || lines[i].length < 10) continue;
+		if(i != lines.length){
+			var splitby	 = ',';
+			var eov = lines[i].split(splitby);
+			var obj = new Object();
+		   	obj.pointNumber = i;
+   			obj.y = Number(eov[0]);
+   			obj.x = Number(eov[1]);
+   			obj.h = 0;
+   			obj.remark = "";
+   			jsonArray.push(obj);
+//			document.getElementById('WGS84OUT'+j).value+= i+' \n';
+		} else {
+   			jsonArray.push(jsonArray[0]);
+//			document.getElementById('WGS84OUT'+j).value+=(i+1)+' \n';
+		}
+	}
+	transformDataBulk(j, jsonArray);
+}
+function displayField1(){
+	for(var i = 0; i < 300; i++){
+		if(document.getElementById('eov_'+i) != null)
+			displayField(i);
+	}
+}
+
 function displayField(j){
 	var coordinates = document.getElementById('WGS84OUT'+j).value.replaceAll(",0","").split("\n");
 	var data = "[";
@@ -184,6 +229,44 @@ function teszt(){
 	console.log(res);
 
 }
+function transformDataBulk(i, data){
+	/*
+	curl --location 
+		--request POST 
+		'https://eht2.gnssnet.hu/api/transformation/eov-to-etrs89' 
+		--header 'Content-Type: application/json' 
+		--data-raw '[{"pointNumber":"1","y":722440.365 , "x": 184418.844,"h":57.460,"remark":""}]'
+	*/
+	console.log(data);
+	fetch('https://eht2.gnssnet.hu/api/transformation/eov-to-etrs89', 
+		{method: "POST", headers: { "Content-Type": "application/json"},body: JSON.stringify(data)})
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('Network response was not OK');
+    }
+//    console.log(response);
+//    console.log(response.json());
+    return response.json();
+  })
+  .then(data => {
+    // Process the retrieved data
+    var str = "";
+    var str1 = "";
+    for(var j = 0; j < data.length;j++){
+    	if(j!=0) {str1+="\n"; str+="\n";}
+	    str1 += data[j].pointNumber + ","; 
+	    str += data[j].lon + ','+data[j].lat +',0';
+	    str1 += data[j].lon + ','+data[j].lat +',0';
+    }
+    document.getElementById('WGS84OUT'+i).value = str;
+    console.log("Results for entry: " + j + " " + str1);
+  })
+  .catch(error => {
+    // Handle any errors that occurred during the request
+    console.error('Error:', error);
+  });
+}
+
 function transformData(i,id, eovx, eovy, eovh){
 	fetch('https://eht2.gnssnet.hu/api/transformation/eov-to-etrs89?pointNumber='+id+'&x='+eovx+'&y='+eovy+'&h='+eovh)
   .then(response => {
