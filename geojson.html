@@ -26,12 +26,15 @@
 </style>
 
 <body>
-	<textarea id="EOVIN" width=70 height=10 placeholder="Tedd a geoJSON-t ide"></textarea><br>
-	<input type = "button" onclick = "szamol()" rows=5 cols=20 value = "Bemenet tablazatra alakitasa!"></input>->
-	<input type = "button" onclick = "szamolfoldBulk1()" value = "Összes EOV átszámolása WGS84-re"></td> Várj picit majd:
-	<input type = "button" onclick = "displayField1()" value = "Összes megjelenítése térképen"></td> Tájékozódáshoz, nem ugyan úgy mutatja mint Google Earth <br>
-	<input type = "button" onclick = "downloadAsKML1()" value = "Összes letöltése 1 KML-ben"></td> <br>
-	<input type = "button" onclick = "downloadAsKML2()" value = "Fájlok letöltése KML-ben"></td> (Ez utóbbi sajnos lehet csak az első 10 fájlt fogja letölteni :( )
+	<textarea id="EOVIN" cols=40 rows=5 placeholder="Tedd a geoJSON-t ide"></textarea><br>
+	<input type = "button" onclick = "szamol()"  value = "Bemenet tablazatra alakitasa!"></input>->
+	<input type = "button" onclick = "szamolfoldBulk1()" value = "Összes EOV átszámolása WGS84-re"></td> 
+	<br>Várj picit majd:
+<ul>
+  <li><input type = "button" onclick = "displayField1()" value = "Összes megjelenítése térképen"></td> Tájékozódáshoz, nem ugyan úgy mutatja mint Google Earth </li>
+  <li><input type = "button" onclick = "downloadAsKML1()" value = "Összes letöltése 1 KML-ben"></td> </li>
+  <li><input type = "button" onclick = "downloadAsKML2()" value = "Fájlok letöltése KML-ben"></td> (Ez utóbbi sajnos lehet csak az első 10 fájlt fogja letölteni :( )</li>
+</ul>
 	  <br><br>
 <div id="map"></div>
 <div id="output"></div>
