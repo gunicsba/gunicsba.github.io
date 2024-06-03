@@ -29,8 +29,9 @@
 	<textarea id="EOVIN" width=70 height=10 placeholder="Tedd a geoJSON-t ide"></textarea><br>
 	<input type = "button" onclick = "szamol()" rows=5 cols=20 value = "Bemenet tablazatra alakitasa!"></input>->
 	<input type = "button" onclick = "szamolfoldBulk1()" value = "Összes EOV átszámolása WGS84-re"></td> Várj picit majd:
-	<input type = "button" onclick = "displayField1()" value = "Összes megjelenítése térképen"></td>/
-	<input type = "button" onclick = "downloadAsKML1()" value = "Összes letöltése KML-ben"></td>
+	<input type = "button" onclick = "displayField1()" value = "Összes megjelenítése térképen"></td> Tájékozódáshoz, nem ugyan úgy mutatja mint Google Earth <br>
+	<input type = "button" onclick = "downloadAsKML1()" value = "Összes letöltése 1 KML-ben"></td> <br>
+	<input type = "button" onclick = "downloadAsKML2()" value = "Fájlok letöltése KML-ben"></td> (Ez utóbbi sajnos lehet csak az első 10 fájlt fogja letölteni :( )
 	  <br><br>
 <div id="map"></div>
 <div id="output"></div>
@@ -292,8 +293,54 @@ function transformData(i,id, eovx, eovy, eovh){
   });
 }
 
-	
 function downloadAsKML1(){
+
+const element = document.createElement('a');
+var KMLContent = `<?xml version="1.0" encoding="utf-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>\n`;
+
+	for(var i = 0; i < 300; i++){
+		if(document.getElementById('eov_'+i) == null) continue;
+		var datacsv = document.getElementById('WGS84OUT'+i).value;
+		datacsv = datacsv.replaceAll('\n',' ');
+		KMLContent += `    <Placemark>\n
+    <Style>
+    	<PolyStyle><color>80`+ Math.floor(Math.random()*4194303).toString(16)+
+	`</color><fill>1</fill><outline>1</outline>
+        </PolyStyle>
+    </Style>
+      <name>`;
+      KMLContent += document.getElementById('foldnev'+i).innerHTML +'</name>\n'+
+'      <Polygon>\n'+
+'         <tessellate>1</tessellate>\n'+
+'         <outerBoundaryIs>\n'+
+'            <LinearRing>\n'+
+'	       <coordinates>'+ 
+	(datacsv +'</coordinates>\n').replace(' </','</')+
+'            </LinearRing>\n'+
+'         </outerBoundaryIs>\n'+
+'      </Polygon>\n'+
+'   </Placemark>\n';
+	}
+
+KMLContent += ' </Document>\n'+'</kml>';
+
+	const blob = new Blob([ KMLContent ]
+		, {type: 'plain/text' });
+
+
+const fileUrl = URL.createObjectURL(blob);
+element.setAttribute('href', fileUrl);
+element.setAttribute('download','tobbterulet__'+document.getElementById('foldnev0').innerHTML+'_estarsai.kml');
+element.style.display = 'none';
+document.body.appendChild(element);
+element.click();
+document.body.removeChild(element);
+
+}
+
+function downloadAsKML2(){
 	for(var i = 0; i < 300; i++){
 		if(document.getElementById('eov_'+i) != null)
 			downloadAsKML(i);
