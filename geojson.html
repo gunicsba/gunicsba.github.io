@@ -104,7 +104,7 @@ function szamol(){
 	for( var terulet of myarray) {
 		console.log(terulet.productID);
 		htmltext += "<tr><td>" + i +"</td>";
-		htmltext += "<td>" + terulet.coveredItem.properties.description.itemGroupValue+"</td>";
+		htmltext += "<td id='telepules"+i+"'>" + terulet.coveredItem.properties.description.itemGroupValue+"</td>";
 		htmltext += "<td id='foldnev"+i+"'>" + terulet.coveredItem.properties.description.itemDescription+"</td>";
 		htmltext += "<td><textarea id='eov_"+i+"' cols='20'>";
 		for(var koordinatapar of terulet.coveredItem.geometry.coordinates[0][0]){
@@ -148,7 +148,7 @@ function szamolfold(j) {
 
 function szamolfoldBulk1() {
 	console.log("SZamolFoldBulk1() ")
-	for(var i = 0; i < 300; i++){
+	for(var i = 0; i < 1000; i++){
 		if(document.getElementById('eov_'+i) != null)
 			szamolfoldBulk(i);
 	}
@@ -303,7 +303,7 @@ var KMLContent = `<?xml version="1.0" encoding="utf-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
   <Document>\n`;
 
-	for(var i = 0; i < 300; i++){
+	for(var i = 0; i < 3000; i++){
 		if(document.getElementById('eov_'+i) == null) continue;
 		var datacsv = document.getElementById('WGS84OUT'+i).value;
 		datacsv = datacsv.replaceAll('\n',' ');
@@ -314,7 +314,7 @@ var KMLContent = `<?xml version="1.0" encoding="utf-8"?>
         </PolyStyle>
     </Style>
       <name>`;
-      KMLContent += document.getElementById('foldnev'+i).innerHTML +'</name>\n'+
+      KMLContent += document.getElementById('telepules'+i).innerHTML +' - ' + document.getElementById('foldnev'+i).innerHTML +'</name>\n'+
 '      <Polygon>\n'+
 '         <tessellate>1</tessellate>\n'+
 '         <outerBoundaryIs>\n'+
