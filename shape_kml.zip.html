@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shapefile with shp.js</title>
+  <script src="https://unpkg.com/jszip/dist/jszip.min.js"></script>
+  <script src="https://unpkg.com/shpjs/dist/shp.min.js"></script>
+</head>
+<body>
+  <h1>Geoshopos EOV alapú Shape -> AgOpen KML konvertáló</h1>
+  <p>Válasszuk ki a zip fájlt amit a geoshop.hu -n vásároltunk. Ebben ugyan van egy .prj fájl de ezt mi figyelmen kívül hagyjuk ugyanis az EHT2 API segítségével fogjuk az EOV -> WGS84 konvertálást megcsinálni. Miért? Mert ez sokkal pontosabb mint a QGIS.</p>
+  <input type="file" id="shapefileInput" accept=".zip" />
+  <button id="processBtn">Eriggyé!</button>
+  <pre id="output"></pre>
+
+  <script>
+    document.getElementById('processBtn').addEventListener('click', async () => {
+      const fileInput = document.getElementById('shapefileInput');
+      const file = fileInput.files[0];
+      const output = document.getElementById('output');
+
+      if (!file) {
+        output.textContent = "Please upload a shapefile ZIP file.";
+        return;
+      }
+
+      try {
+
+        // Load and read the zip file using JSZip
+        const zip = await JSZip.loadAsync(file);
+
+        // Create an object to hold the .shp and .dbf files (ignore .prj)
+        const shapefileData = {};
+
+        // Iterate through the files in the ZIP and remove .prj files
+        zip.forEach((relativePath, zipEntry) => {
+          if (relativePath.toLowerCase().endsWith(".prj")) {
+            // Simply skip over .prj files, effectively removing them
+            return;
+          }
+          if (relativePath.toLowerCase().endsWith(".shp")) {
+            shapefileData.shp = zipEntry.async("arraybuffer");
+          } else if (relativePath.toLowerCase().endsWith(".dbf")) {
+            shapefileData.dbf = zipEntry.async("arraybuffer");
+          }
+        });
+
+        // Wait for both the .shp and .dbf files to be read into ArrayBuffers
+        const [shpArrayBuffer, dbfArrayBuffer] = await Promise.all([shapefileData.shp, shapefileData.dbf]);
+
+        // Create an object with the .shp and .dbf properties for shp.js
+        const shapefile = { shp: shpArrayBuffer, dbf: dbfArrayBuffer };
+
+        // Load and parse the shapefile from the ArrayBuffer
+        const geojson = await shp(shapefile);
+
+        // Extract coordinates from all features
+        const coordinates = geojson.features.map(feature => feature.geometry.coordinates);
+        
+        var htmltext = "<table> ";
+        htmltext += "<thead><td>ID</td><td>GroupValue</td>";
+        htmltext += "<td>itemDescription</td>";
+        htmltext += "<td>EOV koordinatak</td>";
+        htmltext += "<td></td>";
+        htmltext += "<td>WGS84 koordinatak</td>";
+        htmltext += "<td>Letöltes</td>";
+        htmltext += "</thead>";
+
+        var i = 0;
+        for(var feature of geojson.features) {
+          console.log(feature);
+          htmltext += "<tr><td>" + i +"</td>";
+          htmltext += "<td id='telepules"+i+"'>" + feature.properties.telepules+"</td>";
+          htmltext += "<td id='foldnev"+i+"'>" + feature.properties.hrsz+"</td>";
+          htmltext += "<td><textarea id='eov_"+i+"' cols='20'>";
+          console.log(feature.geometry.coordinates);
+          for(var koordinatapar of feature.geometry.coordinates[0]){
+            console.log(koordinatapar);
+            htmltext += koordinatapar +"\n";  
+          }
+          htmltext += "</textarea></td>";
+          htmltext += '<td><input type = "button" onclick = "szamolfold('+i+')" value = "Szamolj>>"></td>'
+          htmltext += "<td><textarea id='WGS84OUT"+i+"' cols='30'></textarea></td>";
+          htmltext += '<td><input type = "button" onclick = "downloadAsKML('+i+')" value = "KML">';
+          htmltext += '<input type = "button" onclick = "displayField('+i+')" value = "Megjelenit"><input type = "button" onclick = "egyesit('+i+')" value = "Kombinalt"></td>';
+          htmltext +="</tr>";
+          i++;
+        }
+        htmltext += "</table>";
+        document.getElementById('output').innerHTML = htmltext;
+
+        // Display the coordinates in the output area
+        //output.textContent = JSON.stringify(coordinates, null, 2);
+      } catch (error) {
+        output.textContent = "Error: " + error.message;
+      }
+    });
+
+function szamolfold(j) {
+
+  var lines = document.getElementById('eov_'+j).value.split("\n");
+
+  for(var i = 0; i <= lines.length;i++){
+    if( lines[i] == undefined || lines[i].length < 10) continue;
+    if(i != lines.length){
+      var splitby  = ',';
+      var eov = lines[i].split(splitby);
+        document.getElementById('WGS84OUT'+j).value+= i+' \n';
+        transformData(j,i, eov[1],eov[0],0);        
+    } else {
+      var eov = lines[0].split(splitby);
+      document.getElementById('WGS84OUT'+j).value+='aa'+i+'aa \n';
+      transformData(j,'aa'+i  +'aa', eov[1],eov[0],0);        
+    }
+  }
+}
+
+function szamolfoldBulk1() {
+  console.log("SZamolFoldBulk1() ")
+  for(var i = 0; i < 1000; i++){
+    if(document.getElementById('eov_'+i) != null)
+      szamolfoldBulk(i);
+  }
+}
+
+function szamolfoldBulk(j) {
+  console.log("Calculating for entry: " + j + "  " + document.getElementById('eov_'+j).value);
+  var lines = document.getElementById('eov_'+j).value.split("\n");
+
+  var jsonArray = [];
+
+  for(var i = 0; i <= lines.length;i++){
+    if( lines[i] == undefined || lines[i].length < 10) continue;
+    if(i != lines.length){
+      var splitby  = ',';
+      var eov = lines[i].split(splitby);
+      var obj = new Object();
+        obj.pointNumber = i;
+        obj.y = Number(eov[0]);
+        obj.x = Number(eov[1]);
+        obj.h = 0;
+        obj.remark = "";
+        jsonArray.push(obj);
+//      document.getElementById('WGS84OUT'+j).value+= i+' \n';
+    } else {
+        jsonArray.push(jsonArray[0]);
+//      document.getElementById('WGS84OUT'+j).value+=(i+1)+' \n';
+    }
+  }
+  transformDataBulk(j, jsonArray);
+}
+
+function transformDataBulk(i, data){
+  /*
+  curl --location 
+    --request POST 
+    'https://eht2.gnssnet.hu/api/transformation/eov-to-etrs89' 
+    --header 'Content-Type: application/json' 
+    --data-raw '[{"pointNumber":"1","y":722440.365 , "x": 184418.844,"h":57.460,"remark":""}]'
+  */
+  console.log(data);
+  fetch('https://eht2.gnssnet.hu/api/transformation/eov-to-etrs89', 
+    {method: "POST", headers: { "Content-Type": "application/json"},body: JSON.stringify(data)})
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('Network response was not OK');
+    }
+//    console.log(response);
+//    console.log(response.json());
+    return response.json();
+  })
+  .then(data => {
+    // Process the retrieved data
+    var str = "";
+    var str1 = "";
+    for(var j = 0; j < data.length;j++){
+      if(j!=0) {str1+="\n"; str+="\n";}
+      str1 += data[j].pointNumber + ","; 
+      str += data[j].lon + ','+data[j].lat +',0';
+      str1 += data[j].lon + ','+data[j].lat +',0';
+    }
+    document.getElementById('WGS84OUT'+i).value = str;
+    console.log("Results for entry: " + j + " " + str1);
+  })
+  .catch(error => {
+    // Handle any errors that occurred during the request
+    console.error('Error:', error);
+  });
+}
+
+function transformData(i,id, eovx, eovy, eovh){
+  fetch('https://eht2.gnssnet.hu/api/transformation/eov-to-etrs89?pointNumber='+id+'&x='+eovx+'&y='+eovy+'&h='+eovh)
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('Network response was not OK');
+    }
+    return response.json();
+  })
+  .then(data => {
+    // Process the retrieved data
+    const value = data.lon + ','+data.lat +',0'
+    console.log(id + ' ' + value);
+    const search=id+' ';
+    document.getElementById('WGS84OUT'+i).value = 
+    document.getElementById('WGS84OUT'+i).value.replace(search,
+      value);
+  })
+  .catch(error => {
+    // Handle any errors that occurred during the request
+    console.error('Error:', error);
+  });
+}
+
+function downloadAsKML1(){
+
+const element = document.createElement('a');
+var KMLContent = `<?xml version="1.0" encoding="utf-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>\n`;
+
+  for(var i = 0; i < 3000; i++){
+    if(document.getElementById('eov_'+i) == null) continue;
+    var datacsv = document.getElementById('WGS84OUT'+i).value;
+    datacsv = datacsv.replaceAll('\n',' ');
+    KMLContent += `    <Placemark>\n
+    <Style>
+      <PolyStyle><color>80`+ Math.floor(Math.random()*4194303).toString(16)+
+  `</color><fill>1</fill><outline>1</outline>
+        </PolyStyle>
+    </Style>
+      <name>`;
+      KMLContent += document.getElementById('telepules'+i).innerHTML +' - ' + document.getElementById('foldnev'+i).innerHTML +'</name>\n'+
+'      <Polygon>\n'+
+'         <tessellate>1</tessellate>\n'+
+'         <outerBoundaryIs>\n'+
+'            <LinearRing>\n'+
+'        <coordinates>'+ 
+  (datacsv +'</coordinates>\n').replace(' </','</')+
+'            </LinearRing>\n'+
+'         </outerBoundaryIs>\n'+
+'      </Polygon>\n'+
+'   </Placemark>\n';
+  }
+
+KMLContent += ' </Document>\n'+'</kml>';
+
+  const blob = new Blob([ KMLContent ]
+    , {type: 'plain/text' });
+
+
+const fileUrl = URL.createObjectURL(blob);
+element.setAttribute('href', fileUrl);
+element.setAttribute('download','tobbterulet__'+document.getElementById('foldnev0').innerHTML+'_estarsai.kml');
+element.style.display = 'none';
+document.body.appendChild(element);
+element.click();
+document.body.removeChild(element);
+
+}
+
+function downloadAsKML2(){
+  for(var i = 0; i < 300; i++){
+    if(document.getElementById('eov_'+i) != null)
+      downloadAsKML(i);
+  }
+}
+
+  
+function downloadAsKML(i){
+  downloadAsKML(i,false);
+}
+function downloadAsKML(i, s){
+const element = document.createElement('a');
+var datacsv = document.getElementById('WGS84OUT'+i).value;
+console.log(datacsv);
+if(s){
+  var coordinates = String(datacsv).split("\n");
+  var data = "[";
+  for(var j = 0; j <= coordinates.length;j++){
+    if(String(coordinates[j]).length < 10) continue;
+    if(data.length > 5) data += ',';
+    data += '[' + coordinates[j] + ']';
+  }
+  data += "]";
+  var points = turf.points(JSON.parse(data));
+  console.log(points);
+  //var terulet = turf.concave(points).geometry.coordinates[0];
+  var terulet = turf.convex(points,{concavity: document.getElementById("concavity").value}).geometry.coordinates[0];
+  datacsv = "";
+  for(var j = 0; j <= terulet.length; j++){
+    if(!terulet[j]) continue  ;
+    console.log(j);
+    console.log(terulet[j]);
+    datacsv += terulet[j][0];
+    datacsv += ',';
+    datacsv += terulet[j][1];
+    datacsv += ',0 ';
+  }
+}
+datacsv = datacsv.replaceAll('\n',' ');
+
+const blob = new Blob(
+    [`<?xml version="1.0" encoding="utf-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>\n
+    <Placemark>\n
+    <Style>
+      <PolyStyle><color>80`+ Math.floor(Math.random()*4194303).toString(16)+
+  `</color><fill>1</fill><outline>1</outline>
+        </PolyStyle>
+    </Style>
+      <name>` + document.getElementById('foldnev'+i).innerHTML +'</name>\n'+
+'      <Polygon>\n'+
+'         <tessellate>1</tessellate>\n'+
+'         <outerBoundaryIs>\n'+
+'            <LinearRing>\n'+
+'        <coordinates>'+ 
+  (datacsv +'</coordinates>\n').replace(' </','</')+
+'            </LinearRing>\n'+
+'         </outerBoundaryIs>\n'+
+'      </Polygon>\n'+
+'   </Placemark>\n'+
+' </Document>\n'+
+'</kml>']
+    , {type: 'plain/text' });
+const fileUrl = URL.createObjectURL(blob);
+element.setAttribute('href', fileUrl);
+console.log(document.getElementById('foldnev'+i));
+element.setAttribute('download',document.getElementById('foldnev'+i).innerHTML+'.kml');
+element.style.display = 'none';
+document.body.appendChild(element);
+element.click();
+document.body.removeChild(element);
+}
+  </script>
+<div id="output"></div>
+</body>
+</html>
