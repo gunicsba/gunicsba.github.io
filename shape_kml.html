@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Shapefile with shp.js</title>
+  <title>EOV Shapefile -> AOG Kml</title>
   <script src="https://unpkg.com/jszip/dist/jszip.min.js"></script>
   <script src="https://unpkg.com/shpjs/dist/shp.min.js"></script>
 </head>
 <body>
   <h1>Geoshopos EOV alapú Shape -> AgOpen KML konvertáló</h1>
-  <p>Válasszuk ki a zip fájlt amit a geoshop.hu -n vásároltunk. Ebben ugyan van egy .prj fájl de ezt mi figyelmen kívül hagyjuk ugyanis az EHT2 API segítségével fogjuk az EOV -> WGS84 konvertálást megcsinálni. Miért? Mert ez sokkal pontosabb mint a QGIS.</p>
+  <p>Válasszuk ki a zip fájlt amit a <a href="https://geoshop.hu">geoshop.hu</a>-n vásároltunk. Ebben ugyan van egy .prj fájl de ezt mi figyelmen kívül hagyjuk ugyanis az <a href="https://eht2.gnssnet.hu/">EHT2 API</a> segítségével fogjuk az EOV -> WGS84 konvertálást megcsinálni. <br><br>Ez sokkal pontosabb mint bármi más.</p>
   <input type="file" id="shapefileInput" accept=".zip" />
   <button id="processBtn">Eriggyé!</button>
   <pre id="output"></pre>
@@ -21,7 +21,7 @@
       const output = document.getElementById('output');
 
       if (!file) {
-        output.textContent = "Please upload a shapefile ZIP file.";
+        output.textContent = "Tölts fel egy shp állományt zipként (ne csak az shp-t hanem a többi fájlt is tedd bele a zipbe)";
         return;
       }
 
@@ -59,8 +59,8 @@
         const coordinates = geojson.features.map(feature => feature.geometry.coordinates);
         
         var htmltext = "<table> ";
-        htmltext += "<thead><td>ID</td><td>GroupValue</td>";
-        htmltext += "<td>itemDescription</td>";
+        htmltext += "<thead><td>ID</td><td>Település</td>";
+        htmltext += "<td>HRSZ</td>";
         htmltext += "<td>EOV koordinatak</td>";
         htmltext += "<td></td>";
         htmltext += "<td>WGS84 koordinatak</td>";
@@ -73,7 +73,9 @@
           htmltext += "<tr><td>" + i +"</td>";
           htmltext += "<td id='telepules"+i+"'>" + feature.properties.telepules+"</td>";
           htmltext += "<td id='foldnev"+i+"'>" + feature.properties.hrsz+"</td>";
-          htmltext += "<td><textarea id='eov_"+i+"' cols='20'>";
+          htmltext += "<td>";
+          htmltext += feature.properties.terulet_m2; 
+          htmltext += "m2 <textarea id='eov_"+i+"' cols='20'>";
           console.log(feature.geometry.coordinates);
           for(var koordinatapar of feature.geometry.coordinates[0]){
             console.log(koordinatapar);
@@ -83,12 +85,15 @@
           htmltext += '<td><input type = "button" onclick = "szamolfold('+i+')" value = "Szamolj>>"></td>'
           htmltext += "<td><textarea id='WGS84OUT"+i+"' cols='30'></textarea></td>";
           htmltext += '<td><input type = "button" onclick = "downloadAsKML('+i+')" value = "KML">';
-          htmltext += '<input type = "button" onclick = "displayField('+i+')" value = "Megjelenit"><input type = "button" onclick = "egyesit('+i+')" value = "Kombinalt"></td>';
+//          htmltext += '<input type = "button" onclick = "displayField('+i+')" value = "Megjelenit"><input type = "button" onclick = "egyesit('+i+')" value = "Kombinalt">';
+          htmltext += '</td>';
           htmltext +="</tr>";
           i++;
         }
         htmltext += "</table>";
+        htmltext += '<br><input type = "button" onclick = "downloadAsKML1()" value = "Összes letöltése 1 KML-ben"></td>';
         document.getElementById('output').innerHTML = htmltext;
+        szamolfoldBulk1();
 
         // Display the coordinates in the output area
         //output.textContent = JSON.stringify(coordinates, null, 2);
