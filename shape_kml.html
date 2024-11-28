@@ -6,12 +6,64 @@
   <title>EOV Shapefile -> AOG Kml</title>
   <script src="https://unpkg.com/jszip/dist/jszip.min.js"></script>
   <script src="https://unpkg.com/shpjs/dist/shp.min.js"></script>
+  <style>
+        body {
+            font-family: Arial, sans-serisf;
+            margin: 20px;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        h1, h3 { 
+            color: #333;
+            text-align: center;
+        }
+        .container {
+            max-width: 800px;
+            margin: auto;
+            padding: 10px;
+        }
+        textarea, input[type="text"], input[type="file"], input[type="button"], input[type="submit"], button {
+            padding: 8px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            width: calc(100% - 20px);
+            box-sizing: border-box;
+        }
+        textarea {
+            resize: vertical;
+            background-color:  #d4e6f1 ;
+        }
+        button {
+            background-color:  #5499c7 ;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color:  #7fa92a ;
+        }
+                /* Placeholder style */
+        ::-webkit-input-placeholder {
+            color: #7fa92a;
+        }
+        :-moz-placeholder {
+            color: #7fa92a;
+        }
+        ::-moz-placeholder {
+            color: #7fa92a;
+        }
+        :-ms-input-placeholder {
+            color: #7fa92a;
+        }
+    </style>
 </head>
 <body>
   <h1>Geoshopos EOV alapú Shape -> AgOpen KML konvertáló</h1>
-  <p>Válasszuk ki a zip fájlt amit a <a href="https://geoshop.hu">geoshop.hu</a>-n vásároltunk. Ebben ugyan van egy .prj fájl de ezt mi figyelmen kívül hagyjuk ugyanis az <a href="https://eht2.gnssnet.hu/">EHT2 API</a> segítségével fogjuk az EOV -> WGS84 konvertálást megcsinálni. <br><br>Ez sokkal pontosabb mint bármi más.</p>
+  <div class="container">
+  <p>Válasszuk ki a zip fájlt amit a <a href="https://geoshop.hu">geoshop.hu</a>-n vásároltunk. Ebben ugyan van egy .prj fájl de ezt mi figyelmen kívül hagyjuk ugyanis az <a href="https://eht2.gnssnet.hu/">EHT2 API</a> segítségével fogjuk az EOV -> WGS84 konvertálást megcsinálni. <br><br>És pontosabb mint a Google Earth vagy QGIS.</p>
+  <hr>
   <input type="file" id="shapefileInput" accept=".zip" />
-  <button id="processBtn">Eriggyé!</button>
+  <button id="processBtn">Számolj!</button>
   <pre id="output"></pre>
 
   <script>
@@ -59,10 +111,12 @@
         const coordinates = geojson.features.map(feature => feature.geometry.coordinates);
         
         var htmltext = "<table> ";
-        htmltext += "<thead><td>ID</td><td>Település</td>";
+        htmltext += "<thead>";
+        //<td>ID</td>
+        htmltext += "<td>Település</td>";
         htmltext += "<td>HRSZ</td>";
+        htmltext += "<td>méret</td>";
         htmltext += "<td>EOV koordinatak</td>";
-        htmltext += "<td></td>";
         htmltext += "<td>WGS84 koordinatak</td>";
         htmltext += "<td>Letöltes</td>";
         htmltext += "</thead>";
@@ -70,19 +124,20 @@
         var i = 0;
         for(var feature of geojson.features) {
           console.log(feature);
-          htmltext += "<tr><td>" + i +"</td>";
+          htmltext += "<tr>";
+//          htmltext += "<td>" + i +"</td>";
           htmltext += "<td id='telepules"+i+"'>" + feature.properties.telepules+"</td>";
           htmltext += "<td id='foldnev"+i+"'>" + feature.properties.hrsz+"</td>";
-          htmltext += "<td>";
-          htmltext += feature.properties.terulet_m2; 
-          htmltext += "m2 <textarea id='eov_"+i+"' cols='20'>";
+          htmltext += "<td>  ";
+          htmltext += Math.round(feature.properties.terulet_m2/1000)/10; 
+          htmltext += "ha</td><td><textarea id='eov_"+i+"' cols='20'>";
           console.log(feature.geometry.coordinates);
           for(var koordinatapar of feature.geometry.coordinates[0]){
             console.log(koordinatapar);
             htmltext += koordinatapar +"\n";  
           }
           htmltext += "</textarea></td>";
-          htmltext += '<td><input type = "button" onclick = "szamolfold('+i+')" value = "Szamolj>>"></td>'
+//          htmltext += '<td><input type = "button" onclick = "szamolfold('+i+')" value = "Szamolj>>"></td>'
           htmltext += "<td><textarea id='WGS84OUT"+i+"' cols='30'></textarea></td>";
           htmltext += '<td><input type = "button" onclick = "downloadAsKML('+i+')" value = "KML">';
 //          htmltext += '<input type = "button" onclick = "displayField('+i+')" value = "Megjelenit"><input type = "button" onclick = "egyesit('+i+')" value = "Kombinalt">';
@@ -91,7 +146,7 @@
           i++;
         }
         htmltext += "</table>";
-        htmltext += '<br><input type = "button" onclick = "downloadAsKML1()" value = "Összes letöltése 1 KML-ben"></td>';
+        htmltext += '<br><button onclick = "downloadAsKML1()">Összes letöltése 1 KML-ben</button></td>';
         document.getElementById('output').innerHTML = htmltext;
         szamolfoldBulk1();
 
@@ -339,6 +394,7 @@ element.click();
 document.body.removeChild(element);
 }
   </script>
-<div id="output"></div>
+  <div id="output"></div>
+ </div>
 </body>
 </html>
