@@ -59,6 +59,12 @@
         :-ms-input-placeholder {
             color: #7fa92a;
         }
+        table {
+          width: 100%;
+        }
+        td,th {
+          border-bottom: 1px solid #ddd;
+        }
     </style>
 </head>
 <body>
@@ -66,12 +72,16 @@
   <div class="container">
   <p>Ezen oldal segítségével lehetőségünk van az AgOpenGPS által készített határvonalakat SHP avagy Shape formátumba hozni. Az AKG és az Egységes Kérelemhez "EOV koordinátákkal körbehatárolt" terület szükséges. Az EOV koordinátarendszerbe történő átváltáshoz szükséges egy javítórács használata. Ezt mi az <a href="https://eht2.gnssnet.hu/">EHT2 API</a> segítségével fogjuk megoldani, mert ez garantálja a pontos átváltást. A generált fájlok .zip kiterjesztéssel vannak és a .prj azaz projekciós fájl azonos a geoshop.hu által letöltött állomány projekciós fájljával.
   <br><br>
-  Listázza az összes területet. Ezekhez tartozó KÜLSŐ határvonalból tudunk WGS84 és EOV alapú shape fájlokat készíteni.
+  Listázza az összes területet. Ezekhez tartozó KÜLSŐ és BELSŐ határvonalból tudunk WGS84 és EOV alapú shape fájlokat készíteni.
+  Van lehetőség csak a külsőt használni és a többit figyelmen kívül hagyni.
   <br><br>Ami még (szerintem) jó lenne:
-     <li/> Belső határvonalak alapján nem művelhető területeket jelölni.
      <li/> A zip fájlban ne POLYGON.shp hanem a rendes területnév szerepeljen.
   <br><br>
-  <strong>Jó lenne tudni, hogy a kimenetet megeszi-e az államigazgatási rendszer.</strong>
+  Egységes kérelemnél úgy tűnik jó de <strong>csak külső</strong> határt tudja kezelni.
+  <br>
+  Egyéb felületekkel tesztelés szükséges.
+  <br>
+  <br>Ha bármi hiba lenne akkor <a href="https://github.com/gunicsba/gunicsba.github.io/issues">itt jelezhetitek</a>.
   <br><br>
   A kiválasztandó fájl alapból a <strong>Dokumentumok/AgOpenGPS/Fields/AllFields.kml</strong> alatt található.
   <input type="file" id="kmlfileInput" accept=".kml" />
@@ -87,7 +97,7 @@
       const output1 = document.getElementById('output');
 
       if (!file) {
-        output1.textContent = "Tölts fel egy shp állományt zipként (ne csak az shp-t hanem a többi fájlt is tedd bele a zipbe)";
+        output1.textContent = "Nincs fájl kiválasztva!!";
         return;
       }
 
@@ -106,7 +116,7 @@
 
         // Extract specific data (e.g., Folder names, descriptions, and coordinates)
         const folders = xmlDoc.getElementsByTagNameNS(kmlNamespace, "Folder");
-        output += "<table><thead><td>Field name</td><td>Boundary Name</td><td>WGS84 coordinates</td><td/><td>EOV coordinates</td><td/></thead>";
+        output += "<table><thead><td>Terület név</td><td>WGS84 koordináták<br>külső<br>belső</td><td>WGS84 alapú SHP</td><td>EOV koordináták<br>külső<br>belső</td><td>EOV alapú SHP</td><td/></thead>";
         console.log(folders);
         for (let folder of folders) {
           const name = folder.getElementsByTagNameNS(kmlNamespace, "name")[0]?.textContent || "No name";
@@ -123,50 +133,51 @@
 
             // Find Placemark elements inside the Boundaries folder
             const placemarks = folder.getElementsByTagNameNS(kmlNamespace, "Placemark");
+            var innerboundary = "";
             for (let placemark of placemarks) {
               console.log(placemark);
               const coordinates = placemark.getElementsByTagNameNS(kmlNamespace, "coordinates")[0]?.textContent.trim() || "No coordinates";
               if(coordinates === "No coordinates") {
                 continue;
               }
-//              console.log(coordinates);
               const placemarkName = placemark.getElementsByTagNameNS(kmlNamespace, "name")[0]?.textContent || "Inner Boundary";
               if(placemarkName === "Inner Boundary"){
+                innerboundary += coordinates.replaceAll(" ","\n");
+                innerboundary += ";";
                 continue;
               }
-              output += "<tr><td>" + folderName.textContent.trim() + "</td>";
-                output += "<td id='name_"+i+"'>" + placemarkName + "</td>";
-                output += "<td><textarea id='WGS84_"+i+"'>"+ coordinates.replaceAll(" ","\n") + "</textarea></td>";
-
-                output += '<td><input type = "button" class="buttonwide" onclick = "downloadAsWGS84SHP('+i+')" value = "Letölt WGS84-ben  ">';
-                output += '<input type = "button" class="buttonwide" onclick = "szamolfoldBulk('+i+')" value = "-> "></td>';
-                output += "<td><textarea id='EOV_"+i+"'></textarea></td>";
-                output += '<td><input type = "button" class="buttonwide" onclick = "downloadAsEOVSHP('+i+')" value = "Letölt EOV-ben  "></td>';
+              output += "<tr><td id='name_"+i+"'>" + folderName.textContent.trim() + "</td>";
+//                output += "<td id='name_"+i+"'>" + placemarkName + "</td>";
+                output += "<td><textarea id='WGS84_"+i+"'>"+ coordinates.replaceAll(" ","\n") + "</textarea>";
+                output += "<textarea id='WGS84INNER_"+i+"'>INNERBOUNDARYINNERBOUNDARY</textarea></td>";
+                output += '<td>';
+                output += '<input type = "button" class="buttonwide" onclick = "downloadAsWGS84SHP('+i+',false)" value = "Csak külső  ">';
+                output += '<br>';
+                output += '<input type = "button" class="buttonwide" onclick = "downloadAsWGS84SHP('+i+',true)" value = "Külső + belső  ">';
+                output += '</td>';
+//                output += '<input type = "button" class="buttonwide" onclick = "szamolfoldBulk('+i+')" value = "-> "></td>';
+                output += "<td><textarea id='EOV_"+i+"'></textarea>";
+                output += "<textarea id='EOVINNER_"+i+"'></textarea></td>";
+                output += '<td>';
+                output += '<input type = "button" class="buttonwide" onclick = "downloadAsEOVSHP('+i+',false)" value = "Csak külső   ">';
+                output += '<br>';
+                output += '<input type = "button" class="buttonwide" onclick = "downloadAsEOVSHP('+i+',true)" value = "Külső + belső   ">';
+                output += '</td>';
+                output += '<td>'+coordinates.length+'</td>';
               output += "</tr>";
               i++;
             }
+            output = output.replaceAll("INNERBOUNDARYINNERBOUNDARY",innerboundary);
           }
 
         }
         output += "</table>";
         console.log(output);
-      /*
-        // Check for parsing errors
-        const errorNode = xmlDoc.getElementsByTagName("parsererror")[0];
-        if (errorNode) {
-          document.getElementById("output").textContent = `Error parsing XML: ${errorNode.textContent}`;
-          return;
-        }
-  
-        // Extract and display some data (adjust based on your XML structure)
-        const output = [];
-        console.log(xmlDoc);
-        const elements = xmlDoc.getElementsByTagName("*"); // Get all elements
-        for (let elem of elements) {
-          output.push(`${elem.tagName}: ${elem.textContent}`);
-        }
-  */
         document.getElementById("output").innerHTML = output;
+        for(var i = 0; i < 1000; i++){
+          if(document.getElementById('WGS84_'+i) != null)
+          szamolfoldBulk(i);
+        }
       };
 
       reader.onerror = function() {
@@ -178,37 +189,7 @@
     })
   </script>
   <script>
-    // Sample GeoJSON (you can replace this with your own GeoJSON)
-    const geojson = {
-      "type": "FeatureCollection",
-      "features": [
-        {
-          "type": "Feature",
-          "geometry": {
-            "type": "Point",
-            "coordinates": [-73.97, 40.77]
-          },
-          "properties": {
-            "name": "Central Park"
-          }
-        }
-      ]
-    };
-      console.log(shpwrite)
-    // Function to download the shapefile as a ZIP
-/*    document.getElementById('downloadBtn').addEventListener('click', () => {
-      // Convert GeoJSON to Shapefile (ZIP format)
-      const shapefile = shpwrite.zip(geojson);
-
-      // Create a download link and trigger the download
-      const blob = new Blob([shapefile], { type: 'application/zip' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = 'output.zip'; // Name of the resulting ZIP file
-      link.click();
-    });
-*/
-async function downloadAsEOVSHP(j) {
+async function downloadAsEOVSHP(j, addInner) {
   var lines = document.getElementById('EOV_'+j).value.split("\n");
   const geojson = {
       "type": "FeatureCollection",
@@ -225,6 +206,7 @@ async function downloadAsEOVSHP(j) {
         }
       ]
     };
+//Outer Boundary first
   var jsonArray = [];
   for(var i = 0; i <= lines.length;i++){
     if( lines[i] == undefined || lines[i].length < 10) continue;
@@ -244,6 +226,33 @@ async function downloadAsEOVSHP(j) {
 
   jsonArray.push(jsonArray[0]);
   geojson.features[0].geometry.coordinates.push(jsonArray);
+
+
+  if(addInner){ //Inner Boundaries
+    var innerboundary = document.getElementById('EOVINNER_'+j).value.split(";");
+    for(var k = 0; k < innerboundary.length; k++) {
+      jsonArray = [];
+      if( innerboundary[k] == undefined || innerboundary[k].length < 10) continue;
+      var lines = innerboundary[k].split("\n");
+      for(var i = 0; i <= lines.length;i++){
+        if( lines[i] == undefined || lines[i].length < 10) continue;
+        if(i != lines.length){
+          var splitby  = ',';
+          var wgs = lines[i].split(splitby);
+          var obj = [];
+          obj.push(Number(wgs[1]));
+          obj.push(Number(wgs[0]));
+          jsonArray.push(obj);
+    //      document.getElementById('WGS84OUT'+j).value+= i+' \n';
+        } else {
+    //      document.getElementById('WGS84OUT'+j).value+=(i+1)+' \n';
+        }
+      }
+      jsonArray.push(jsonArray[0]);
+      geojson.features[0].geometry.coordinates.push(jsonArray);
+    }
+  }
+
   console.log(JSON.stringify(geojson));
   var customPrj = 'PROJCS["HD72_EOV",GEOGCS["GCS_HD72",DATUM["D_Hungarian_1972",SPHEROID["GRS_1967",6378160,298.247167427]],PRIMEM["Greenwich",0],UNIT["Degree",0.017453292519943295]],PROJECTION["Hotine_Oblique_Mercator_Azimuth_Center"],PARAMETER["latitude_of_center",47.14439372222222],PARAMETER["longitude_of_center",19.04857177777778],PARAMETER["azimuth",90],PARAMETER["scale_factor",0.99993],PARAMETER["false_easting",650000],PARAMETER["false_northing",200000],UNIT["Meter",1]]' ;
   // Create a Blob for the custom .prj file
@@ -265,29 +274,16 @@ async function downloadAsEOVSHP(j) {
     zipContent.generateAsync({ type: 'blob' }).then(finalZipBlob => {
       const link = document.createElement('a');
       link.href = URL.createObjectURL(finalZipBlob);
-      link.download = 'eov_'+fileName+'.zip';
+      link.download = 'eov_'+(addInner?'_belsokkel_':'')+fileName+'.zip';
       link.click();
       URL.revokeObjectURL(link.href);
     });
 
   });
-  /*
-  // Create a download link and trigger the download
-  const blob = new Blob([shapefileBinary], { type: 'application/zip' });
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  console.log(document.getElementById('name_'+j));
-  console.log(fileName);
-  link.download = 'output_'+fileName+'.zip'; // Name of the resulting ZIP file
-  link.click();
-
-  // Clean up the object URL
-  URL.revokeObjectURL(link.href);
-  */
 
 }
 
-async function downloadAsWGS84SHP(j) {
+async function downloadAsWGS84SHP(j, addInner) {
   var lines = document.getElementById('WGS84_'+j).value.split("\n");
   const geojson = {
       "type": "FeatureCollection",
@@ -321,6 +317,33 @@ async function downloadAsWGS84SHP(j) {
   }
     jsonArray.push(jsonArray[0]);
     geojson.features[0].geometry.coordinates.push(jsonArray);
+
+
+  if(addInner){ //Inner Boundaries
+    var innerboundary = document.getElementById('WGS84INNER_'+j).value.split(";");
+    for(var k = 0; k < innerboundary.length; k++) {
+      jsonArray = [];
+      if( innerboundary[k] == undefined || innerboundary[k].length < 10) continue;
+      var lines = innerboundary[k].split("\n");
+      for(var i = 0; i <= lines.length;i++){
+        if( lines[i] == undefined || lines[i].length < 10) continue;
+        if(i != lines.length){
+          var splitby  = ',';
+          var wgs = lines[i].split(splitby);
+          var obj = [];
+          obj.push(Number(wgs[0]));
+          obj.push(Number(wgs[1]));
+          jsonArray.push(obj);
+    //      document.getElementById('WGS84OUT'+j).value+= i+' \n';
+        } else {
+    //      document.getElementById('WGS84OUT'+j).value+=(i+1)+' \n';
+        }
+      }
+      jsonArray.push(jsonArray[0]);
+      geojson.features[0].geometry.coordinates.push(jsonArray);
+    } 
+  }
+
     console.log(JSON.stringify(geojson));
   // Function to download the shapefile as a ZIP
   // Convert GeoJSON to Shapefile (ZIP format)
@@ -334,7 +357,7 @@ async function downloadAsWGS84SHP(j) {
   console.log(document.getElementById('name_'+j));
   const fileName =document.getElementById('name_'+j).innerHTML;
   console.log(fileName);
-  link.download = 'wgs84_'+fileName+'.zip'; // Name of the resulting ZIP file
+  link.download = 'wgs84_'+ (addInner?'_belsokkel_':'')+fileName+'.zip'; // Name of the resulting ZIP file
   link.click();
 
   // Clean up the object URL
@@ -377,10 +400,36 @@ function szamolfoldBulk(j) {
 //      document.getElementById('WGS84OUT'+j).value+=(i+1)+' \n';
     }
   }
-  transformDataBulk(j, jsonArray);
+  transformDataBulk(j, jsonArray, 'EOV_');
+
+  var innerboundary = document.getElementById('WGS84INNER_'+j).value.split(";");
+  for(var k = 0; k < innerboundary.length; k++) {
+    jsonArray = [];
+    if( innerboundary[k] == undefined || innerboundary[k].length < 10) continue;
+    var lines = innerboundary[k].split("\n");
+    for(var i = 0; i <= lines.length;i++){
+      if( lines[i] == undefined || lines[i].length < 10) continue;
+      if(i != lines.length){
+        var splitby  = ',';
+        var eov = lines[i].split(splitby);
+        var obj = new Object();
+          obj.pointNumber = i;
+          obj.lat = Number(eov[1]);
+          obj.lon = Number(eov[0]);
+          obj.h = 0;
+          obj.remark = "";
+          jsonArray.push(obj);
+  //      document.getElementById('WGS84OUT'+j).value+= i+' \n';
+      } else {
+  //      document.getElementById('WGS84OUT'+j).value+=(i+1)+' \n';
+        jsonArray.push(jsonArray[0]);
+      }
+    }
+    transformDataBulk(j, jsonArray, 'EOVINNER_');
+  } 
 }
 
-  function transformDataBulk(i, data){
+  function transformDataBulk(i, data, tgt){
   /*
 curl --location --request POST 'https://eht2.gnssnet.hu/api/transformation/etrs89-to-eov' --header 'Content-Type: application/json' --data-raw '[{"pointNumber":"1","lat":47 , "lon": 20,"h":57.460,"remark":""}]'
   */
@@ -405,7 +454,8 @@ curl --location --request POST 'https://eht2.gnssnet.hu/api/transformation/etrs8
       str += data[j].x + ','+data[j].y +',0';
       str1 += data[j].x + ','+data[j].y +',0';
     }
-    document.getElementById('EOV_'+i).value = str;
+    if(tgt === "EOVINNER_")  str += ";";
+    document.getElementById(tgt+i).value += str; 
     console.log("Results for entry: " + j + " " + str1);
   })
   .catch(error => {
