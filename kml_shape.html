@@ -65,18 +65,18 @@
   <h1>AgOpen AllFields.kml konvertálása shapefileba</h1>
   <div class="container">
   <p>Ezen oldal segítségével lehetőségünk van az AgOpenGPS által készített határvonalakat SHP avagy Shape formátumba hozni. Az AKG és az Egységes Kérelemhez "EOV koordinátákkal körbehatárolt" terület szükséges. Az EOV koordinátarendszerbe történő átváltáshoz szükséges egy javítórács használata. Ezt mi az <a href="https://eht2.gnssnet.hu/">EHT2 API</a> segítségével fogjuk megoldani, mert ez garantálja a pontos átváltást. A generált fájlok .zip kiterjesztéssel vannak és a .prj azaz projekciós fájl azonos a geoshop.hu által letöltött állomány projekciós fájljával.
-  <br>
-  Az AllFields.kml fájl alapból a Dokumentumok/AgOpenGPS/Fields/ könyvtár alatt található.
-  <br>
+  <br><br>
   Listázza az összes területet. Ezekhez tartozó KÜLSŐ határvonalból tudunk WGS84 és EOV alapú shape fájlokat készíteni.
-  Ami még (szerintem) jó lenne:
+  <br><br>Ami még (szerintem) jó lenne:
      <li/> Belső határvonalak alapján nem művelhető területeket jelölni.
      <li/> A zip fájlban ne POLYGON.shp hanem a rendes területnév szerepeljen.
   <br><br>
   <strong>Jó lenne tudni, hogy a kimenetet megeszi-e az államigazgatási rendszer.</strong>
+  <br><br>
+  A kiválasztandó fájl alapból a <strong>Dokumentumok/AgOpenGPS/Fields/AllFields.kml</strong> alatt található.
   <input type="file" id="kmlfileInput" accept=".kml" />
   <br>
-  <button id="processBtn">Generate Shapefile</button>
+  <button id="processBtn">Területek listázása</button>
   <br>
   <div id="output"></div>
 
@@ -138,10 +138,10 @@
                 output += "<td id='name_"+i+"'>" + placemarkName + "</td>";
                 output += "<td><textarea id='WGS84_"+i+"'>"+ coordinates.replaceAll(" ","\n") + "</textarea></td>";
 
-                output += '<td><input type = "button" class="buttonwide" onclick = "downloadAsWGS84SHP('+i+')" value = "Letölt">';
+                output += '<td><input type = "button" class="buttonwide" onclick = "downloadAsWGS84SHP('+i+')" value = "Letölt WGS84-ben  ">';
                 output += '<input type = "button" class="buttonwide" onclick = "szamolfoldBulk('+i+')" value = "-> "></td>';
                 output += "<td><textarea id='EOV_"+i+"'></textarea></td>";
-                output += '<td><input type = "button" class="buttonwide" onclick = "downloadAsEOVSHP('+i+')" value = "Letölt"></td>';
+                output += '<td><input type = "button" class="buttonwide" onclick = "downloadAsEOVSHP('+i+')" value = "Letölt EOV-ben  "></td>';
               output += "</tr>";
               i++;
             }
@@ -265,7 +265,7 @@ async function downloadAsEOVSHP(j) {
     zipContent.generateAsync({ type: 'blob' }).then(finalZipBlob => {
       const link = document.createElement('a');
       link.href = URL.createObjectURL(finalZipBlob);
-      link.download = 'output_'+fileName+'.zip';
+      link.download = 'eov_'+fileName+'.zip';
       link.click();
       URL.revokeObjectURL(link.href);
     });
@@ -334,7 +334,7 @@ async function downloadAsWGS84SHP(j) {
   console.log(document.getElementById('name_'+j));
   const fileName =document.getElementById('name_'+j).innerHTML;
   console.log(fileName);
-  link.download = 'output_'+fileName+'.zip'; // Name of the resulting ZIP file
+  link.download = 'wgs84_'+fileName+'.zip'; // Name of the resulting ZIP file
   link.click();
 
   // Clean up the object URL
