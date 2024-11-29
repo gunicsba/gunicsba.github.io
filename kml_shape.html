@@ -63,8 +63,21 @@
 </head>
 <body>
   <h1>AgOpen AllFields.kml konvertálása shapefileba</h1>
+  <div class="container">
+  <p>Ezen oldal segítségével lehetőségünk van az AgOpenGPS által készített határvonalakat SHP avagy Shape formátumba hozni. Az AKG és az Egységes Kérelemhez "EOV koordinátákkal körbehatárolt" terület szükséges. Az EOV koordinátarendszerbe történő átváltáshoz szükséges egy javítórács használata. Ezt mi az <a href="https://eht2.gnssnet.hu/">EHT2 API</a> segítségével fogjuk megoldani, mert ez garantálja a pontos átváltást. A generált fájlok .zip kiterjesztéssel vannak és a .prj azaz projekciós fájl azonos a geoshop.hu által letöltött állomány projekciós fájljával.
+
+  Az AllFields.kml fájl alapból a Dokumentumok/AgOpenGPS/Fields/ könyvtár alatt található.
+
+  Listázza az összes területet. Ezekhez tartozó KÜLSŐ határvonalból tudunk WGS84 és EOV alapú shape fájlokat készíteni.
+  Ami még (szerintem) jó lenne:
+     * Belső határvonalak alapján nem művelhető területeket jelölni.
+     * A zip fájlban ne POLYGON.shp hanem a rendes területnév szerepeljen.
+
+  <strong>Jó lenne tudni, hogy a kimenetet megeszi-e az államigazgatási rendszer.</strong>
   <input type="file" id="kmlfileInput" accept=".kml" />
+  <br>
   <button id="processBtn">Generate Shapefile</button>
+  <br>
   <div id="output"></div>
 
  <script>
@@ -401,5 +414,6 @@ curl --location --request POST 'https://eht2.gnssnet.hu/api/transformation/etrs8
   });
 }
   </script>
+</div>
 </body>
 </html>
