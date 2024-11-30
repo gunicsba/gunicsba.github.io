@@ -258,9 +258,13 @@ async function downloadAsEOVSHP(j, addInner) {
   // Create a Blob for the custom .prj file
   const prjBlob = new Blob([customPrj], { type: 'text/plain' });
   
+  const options = {
+    folder: 'eov_'+fileName,
+    prj: customPrj
+  }
   // Function to download the shapefile as a ZIP
   // Convert GeoJSON to Shapefile (ZIP format)
-  const shapefileBase64 = await shpwrite.zip(geojson);
+  const shapefileBase64 = await shpwrite.zip(geojson, options);
   // Decode the Base64 content to binary
   const shapefileBinary = base64ToArrayBuffer(shapefileBase64);
   
@@ -268,7 +272,7 @@ async function downloadAsEOVSHP(j, addInner) {
 
   const zip = new JSZip();
   zip.loadAsync(blob).then(zipContent => {
-    zipContent.file("POLYGON.prj",prjBlob);
+    zipContent.file('eov_'+fileName+"/POLYGON.prj",prjBlob);
 
     // Generate the final ZIP
     zipContent.generateAsync({ type: 'blob' }).then(finalZipBlob => {
@@ -344,10 +348,12 @@ async function downloadAsWGS84SHP(j, addInner) {
     } 
   }
 
-    console.log(JSON.stringify(geojson));
+  const fileName =document.getElementById('name_'+j).innerHTML;
+  
+  console.log(JSON.stringify(geojson));
   // Function to download the shapefile as a ZIP
   // Convert GeoJSON to Shapefile (ZIP format)
-  const shapefileBase64 = await shpwrite.zip(geojson);
+  const shapefileBase64 = await shpwrite.zip(geojson, {folder: 'wgs84_'+fileName});
   // Decode the Base64 content to binary
   const shapefileBinary = base64ToArrayBuffer(shapefileBase64);
   // Create a download link and trigger the download
@@ -355,7 +361,6 @@ async function downloadAsWGS84SHP(j, addInner) {
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
   console.log(document.getElementById('name_'+j));
-  const fileName =document.getElementById('name_'+j).innerHTML;
   console.log(fileName);
   link.download = 'wgs84_'+ (addInner?'_belsokkel_':'')+fileName+'.zip'; // Name of the resulting ZIP file
   link.click();
