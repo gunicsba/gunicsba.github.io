@@ -1,0 +1,456 @@
+
+<html>
+
+<link
+  href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css"
+  rel="stylesheet"
+/>
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
+<!-- <script src="https://api.mapbox.com/mapbox.js/plugins/turf/v3.0.11/turf.min.js"></script> -->
+<script src='libs/turf.min.js'></script>
+<style type="text/css">
+	body {
+  margin: 0;
+  padding: 0;
+}
+
+#map {
+	height: 300px;
+}
+#nomap {
+	position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 100%;
+}
+</style>
+
+<body>
+	<a href="https://e-kerelem.mvh.allamkincstar.gov.hu/enter/webform/mekir/sajatadat/BizonylatElovalasztoMekirSajatAdat.xhtml">Elvileg ezzel nyilik</a>
+	<br>
+	F12 gombot megnyomjuk (lehet kell egy frissítés utána) aztán a Hálózat (Network) fülön:
+	<br>Keressük meg a "BizonylatElovalasztoMekirSajatAdat" majd annak a komplett válaszát másoljuk ki.
+	<br>
+	<br>(Mondjuk én ennek sok értelmét nem látom max annyira, hogy így Google earthben lehet láni milyen területeink vannak...)
+	<br>
+	Ide illesszük be:
+	<br>
+	<textarea id="EOVIN" cols=40 rows=5><?xml version='1.0' encoding...>
+	</textarea><br>
+<!--
+		<?xml version='1.0' encoding='UTF-8'?>
+<partial-response><changes><update id="j_id1:jakarta.faces.ViewState:0"><![CDATA[7184564340482501958:6652998269046918559]]></update><eval><![CDATA[PF('TerkepNezetDlg').show(); resizeEvent(null); ;if (PF('MekirVvMap')) {PF('MekirVvMap').clearVectorLayer('tter');
+} else {console.log(' a Map widget nem elérhető !');};if (PF('MekirVvMap')) {PF('MekirVvMap').clearVectorLayer('mv');
+} else {console.log(' a Map widget nem elérhető !');};if (PF('MekirVvMap')) {PF('MekirVvMap').clearVectorLayer('efa');
+} else {console.log(' a Map widget nem elérhető !');};if (PF('MekirVvMap')) {PF('MekirVvMap').clearVectorLayer('vpakg');
+} else {console.log(' a Map widget nem elérhető !');};if (PF('MekirVvMap')) {PF('MekirVvMap').clearVectorLayer('mekirold');
+} else {console.log(' a Map widget nem elérhető !');};if (PF('MekirVvMap')) {PF('MekirVvMap').clearVectorLayer('georef_fotok');
+} else {console.log(' a Map widget nem elérhető !');};if (PF('MekirVvMap')) {PF('MekirVvMap').addFeatureToVectorLayer('tter','POLYGON ((728049.375 247376.359375, 728076.73 247354.54, 728080.12 247352.02, 728091.625 247342.109375, 728466.75 247880.984375, 728462.5 247882.859375, 728452.625 247889.859375, 728424.875 247914.984375, 728049.375 247376.359375))','','1', '');
+PF('MekirVvMap').setLayerFeatureProperty('tter','1',{"_geomType":"Polygon","head":{"Sorszám":"1"},"label":"1"});
+} else {console.log(' a Map widget nem elérhető !');};if (PF('MekirVvMap')) {PF('MekirVvMap').setMapReadOnly(true);
+} else {console.log(' a Map widget nem elérhető !');};]]></eval></changes></partial-response>
+-->
+	<input type = "button" onclick = "szamol()"  value = "Bemenet tablazatra alakitasa!"></input>->
+	<input type = "button" onclick = "szamolfoldBulk1()" value = "Összes EOV átszámolása WGS84-re"></td> 
+	<br>Várj picit majd:
+<ul>
+  <li><input type = "button" onclick = "displayField1()" value = "Összes megjelenítése térképen"></td> Tájékozódáshoz, nem ugyan úgy mutatja mint Google Earth </li>
+  <li><input type = "button" onclick = "downloadAsKML1()" value = "Összes letöltése 1 KML-ben"></td> </li>
+  <li><input type = "button" onclick = "downloadAsKML2()" value = "Fájlok letöltése KML-ben"></td> (Ez utóbbi sajnos lehet csak az első 10 fájlt fogja letölteni :( )</li>
+</ul>
+	  <br><br>
+<div id="map"></div>
+<div id="output"></div>
+<hr>
+<div id="kombi">
+		<div id="foldnevKOMBI">kombinalt</div>
+		<textarea id='WGS84OUTKOMBI' cols='30'></textarea>;
+		Erzekenyseg megjelenítéshez, konvertáláshoz, KMLhez: <input id="concavity" type="number" value="1"></input>;
+		<input type = "button" onclick = "downloadAsKML('KOMBI',true)" value = "Egyesített KML"></input>;
+		<input type = "button" onclick = "displayField('KOMBI')" value = "Megjelenit"></input>;
+</div>
+</body>
+
+<script type="text/javascript">
+//mapbox stuff 
+	mapboxgl.accessToken = 'pk.eyJ1IjoiZ3VuaWNzYmEiLCJhIjoiY2x2emdtODF5MDJyZzJrcGg4anFocDMzZiJ9.5AHFwVRqLvSlNfCDx1musA';
+	const map = new mapboxgl.Map({
+  	container: 'map', // container id
+  	style: 'mapbox://styles/mapbox/light-v11', // stylesheet location
+  	center: [19.51, 46.88], // starting position
+  	zoom: 16 // starting zoom
+	});
+
+	var coordSample ;// = [[19.5, 46.5],[19.5, 47],[19, 47],[19, 46.5],[19.5, 46.5]];
+  const geoSample =  { 
+    		type: 'Feature',
+    		properties: {},
+    		geometry: {
+    			type: 'LineString',
+    			coordinates: coordSample
+    		}
+      };
+  	map.on('load', () => {
+/*
+			map.addSource('kecskemet',{type: 'geojson', data: geoSample });
+  		map.addLayer({
+    		id: 'kecskemet',
+	    	type: 'fill',
+  	  	source: 'kecskemet',
+	    	paint: {}
+  		});
+*/
+		});
+//mapbox stuff 
+
+function szamol(){
+
+	// Regular expression to extract polygon points and value
+	const pattern = /\.addFeatureToVectorLayer\('tter','POLYGON \(\((.*?)\).*\)','','(\d+)'/g;
+
+	// Array to store the results
+	const output = [];
+	let match;
+
+	var input = document.getElementById('EOVIN').value;
+
+	// Parse the data
+	while ((match = pattern.exec(input)) !== null) {
+    const polygonPoints = match[1].split(", "); // Split coordinates by ", "
+    const value = parseInt(match[2], 10); // Convert the value to an integer
+    output.push({ polygon: polygonPoints, value });
+	}
+	console.log(output);
+//	console.log(input[0].discreteProducts);
+	var htmltext = "<table> ";
+	htmltext += "<thead><td>ID</td>";
+	htmltext += "<td>EOV koordinatak</td>";
+	htmltext += "<td></td>";
+	htmltext += "<td>WGS84 koordinatak</td>";
+	htmltext += "<td>Letöltes</td>";
+	htmltext += "</thead>";
+	var i = 0;
+	for( var terulet of output) {
+		console.log(terulet);
+		htmltext += "<tr><td>" + terulet.value +"</td>";
+		htmltext += "<td><textarea id='foldnev"+i+"' cols='20'>";
+		htmltext += terulet.value;
+		htmltext += "</textarea></td>";
+		htmltext += "<td><textarea id='eov_"+i+"' cols='20'>";
+		console.log(terulet.polygon);
+		htmltext += terulet.polygon.join("\n");	
+		htmltext += "</textarea></td>";
+		htmltext += '<td><input type = "button" onclick = "szamolfold('+i+')" value = "Szamolj>>"></td>'
+		htmltext += "<td><textarea id='WGS84OUT"+i+"' cols='30'></textarea></td>";
+		htmltext += '<td><input type = "button" onclick = "downloadAsKML('+i+')" value = "KML">';
+		htmltext += '<input type = "button" onclick = "displayField('+i+')" value = "Megjelenit"><input type = "button" onclick = "egyesit('+i+')" value = "Kombinalt"></td>';
+		htmltext +="</tr>";
+		i++;
+	}
+	htmltext += "</table>";
+	document.getElementById('output').innerHTML = htmltext;
+
+}
+function egyesit(j) {
+	document.getElementById('WGS84OUTKOMBI').value += document.getElementById('WGS84OUT'+j).value;
+	document.getElementById('WGS84OUTKOMBI').value += '\n';
+}
+
+function szamolfold(j) {
+
+	var lines = document.getElementById('eov_'+j).value.split("\n");
+
+	for(var i = 0; i <= lines.length;i++){
+		if( lines[i] == undefined || lines[i].length < 10) continue;
+		if(i != lines.length){
+			var splitby	 = ' ';
+			var eov = lines[i].split(splitby);
+				document.getElementById('WGS84OUT'+j).value+= i+' \n';
+				transformData(j,i, eov[1],eov[0],0);				
+		} else {
+			var eov = lines[0].split(splitby);
+			document.getElementById('WGS84OUT'+j).value+='aa'+i+'aa \n';
+			transformData(j,'aa'+i  +'aa', eov[1],eov[0],0);				
+		}
+	}
+}
+
+function szamolfoldBulk1() {
+	console.log("SZamolFoldBulk1() ")
+	for(var i = 0; i < 1000; i++){
+		if(document.getElementById('eov_'+i) != null)
+			szamolfoldBulk(i);
+	}
+}
+
+function szamolfoldBulk(j) {
+	console.log("Calculating for entry: " + j + "  " + document.getElementById('eov_'+j).value);
+	var lines = document.getElementById('eov_'+j).value.split("\n");
+
+	var jsonArray = [];
+
+	for(var i = 0; i <= lines.length;i++){
+		if( lines[i] == undefined || lines[i].length < 10) continue;
+		if(i != lines.length){
+			var splitby	 = ' ';
+			var eov = lines[i].split(splitby);
+			var obj = new Object();
+		   	obj.pointNumber = i;
+   			obj.y = Number(eov[0]);
+   			obj.x = Number(eov[1]);
+   			obj.h = 0;
+   			obj.remark = "";
+   			jsonArray.push(obj);
+//			document.getElementById('WGS84OUT'+j).value+= i+' \n';
+		} else {
+   			jsonArray.push(jsonArray[0]);
+//			document.getElementById('WGS84OUT'+j).value+=(i+1)+' \n';
+		}
+	}
+	transformDataBulk(j, jsonArray);
+}
+function displayField1(){
+	for(var i = 0; i < 300; i++){
+		if(document.getElementById('eov_'+i) != null)
+			displayField(i);
+	}
+}
+
+function displayField(j){
+	var coordinates = document.getElementById('WGS84OUT'+j).value.replaceAll(",0","").split("\n");
+	var data = "[";
+	for(var i = 0; i <= coordinates.length;i++){
+		if(String(coordinates[i]).length < 10) continue;
+		if(data.length > 5) data += ',';
+		data += '[' + coordinates[i] + ']';
+	}
+	data += "]";
+	var tempGeo = geoSample;
+	console.log(JSON.parse(data));
+//	tempGeo.geometry.coordinates = JSON.parse(data);
+	var points = turf.points(JSON.parse(data));
+	console.log(points);
+	console.log(turf.convex(points).geometry);
+	console.log(turf.convex(points).geometry.coordinates[0]);
+	tempGeo.geometry.coordinates = turf.convex(points,{concavity: document.getElementById("concavity").value}).geometry.coordinates[0];
+	if(map.getSource('overlay'+j)){
+		map.removeLayer('overlay'+j); 
+		map.removeSource('overlay'+j);
+	}
+	map.addSource('overlay'+j,{type: 'geojson', data: tempGeo });
+  map.addLayer({
+  	id: 'overlay'+j,
+	 	type: 'fill',
+   	source: 'overlay'+j,
+	 	paint: {
+	 			'fill-color': '#'+Math.floor(Math.random()*16777215).toString(16), 
+	 			'fill-opacity': 0.3
+	 	}
+  });
+  console.log("Panning to: " + tempGeo.geometry.coordinates[0]);
+  var polygon = turf.points(tempGeo.geometry.coordinates);
+  console.log("Pan to: " +turf.center(polygon).geometry.coordinates);
+  map.panTo(turf.center(polygon).geometry.coordinates, {duration: 2000});
+}
+
+function teszt(){
+   //547 693601.000 275362.990
+	var id = 547;
+	var eovy = 693601.000;
+	var eovx = 275362.990;
+	var eovh = 100;
+	transformData(id, eovx,eovy,eovh);
+	var res = transformData(id, eovx,eovy,0);
+	console.log(res);
+
+}
+function transformDataBulk(i, data){
+	/*
+	curl --location 
+		--request POST 
+		'https://eht2.gnssnet.hu/api/transformation/eov-to-etrs89' 
+		--header 'Content-Type: application/json' 
+		--data-raw '[{"pointNumber":"1","y":722440.365 , "x": 184418.844,"h":57.460,"remark":""}]'
+	*/
+	console.log(data);
+	fetch('https://eht2.gnssnet.hu/api/transformation/eov-to-etrs89', 
+		{method: "POST", headers: { "Content-Type": "application/json"},body: JSON.stringify(data)})
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('Network response was not OK');
+    }
+//    console.log(response);
+//    console.log(response.json());
+    return response.json();
+  })
+  .then(data => {
+    // Process the retrieved data
+    var str = "";
+    var str1 = "";
+    for(var j = 0; j < data.length;j++){
+    	if(j!=0) {str1+="\n"; str+="\n";}
+	    str1 += data[j].pointNumber + ","; 
+	    str += data[j].lon + ','+data[j].lat +',0';
+	    str1 += data[j].lon + ','+data[j].lat +',0';
+    }
+    document.getElementById('WGS84OUT'+i).value = str;
+    console.log("Results for entry: " + j + " " + str1);
+  })
+  .catch(error => {
+    // Handle any errors that occurred during the request
+    console.error('Error:', error);
+  });
+}
+
+function transformData(i,id, eovx, eovy, eovh){
+	fetch('https://eht2.gnssnet.hu/api/transformation/eov-to-etrs89?pointNumber='+id+'&x='+eovx+'&y='+eovy+'&h='+eovh)
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('Network response was not OK');
+    }
+    return response.json();
+  })
+  .then(data => {
+    // Process the retrieved data
+    const value = data.lon + ','+data.lat +',0'
+    console.log(id + ' ' + value);
+    const search=id+' ';
+    document.getElementById('WGS84OUT'+i).value = 
+		document.getElementById('WGS84OUT'+i).value.replace(search,
+    	value);
+  })
+  .catch(error => {
+    // Handle any errors that occurred during the request
+    console.error('Error:', error);
+  });
+}
+
+function downloadAsKML1(){
+
+const element = document.createElement('a');
+var KMLContent = `<?xml version="1.0" encoding="utf-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>\n`;
+
+	for(var i = 0; i < 3000; i++){
+		if(document.getElementById('eov_'+i) == null) continue;
+		var datacsv = document.getElementById('WGS84OUT'+i).value;
+		datacsv = datacsv.replaceAll('\n',' ');
+		KMLContent += `    <Placemark>\n
+    <Style>
+    	<PolyStyle><color>80`+ Math.floor(Math.random()*4194303).toString(16)+
+	`</color><fill>1</fill><outline>1</outline>
+        </PolyStyle>
+    </Style>
+      <name>`;
+      KMLContent += document.getElementById('foldnev'+i).value +'</name>\n'+
+'      <Polygon>\n'+
+'         <tessellate>1</tessellate>\n'+
+'         <outerBoundaryIs>\n'+
+'            <LinearRing>\n'+
+'	       <coordinates>'+ 
+	(datacsv +'</coordinates>\n').replace(' </','</')+
+'            </LinearRing>\n'+
+'         </outerBoundaryIs>\n'+
+'      </Polygon>\n'+
+'   </Placemark>\n';
+	}
+
+KMLContent += ' </Document>\n'+'</kml>';
+
+	const blob = new Blob([ KMLContent ]
+		, {type: 'plain/text' });
+
+
+const fileUrl = URL.createObjectURL(blob);
+element.setAttribute('href', fileUrl);
+element.setAttribute('download','tobbterulet__'+document.getElementById('foldnev0').value+'_estarsai.kml');
+element.style.display = 'none';
+document.body.appendChild(element);
+element.click();
+document.body.removeChild(element);
+
+}
+
+function downloadAsKML2(){
+	for(var i = 0; i < 300; i++){
+		if(document.getElementById('eov_'+i) != null)
+			downloadAsKML(i);
+	}
+}
+
+	
+function downloadAsKML(i){
+	downloadAsKML(i,false);
+}
+function downloadAsKML(i, s){
+const element = document.createElement('a');
+var datacsv = document.getElementById('WGS84OUT'+i).value;
+console.log(datacsv);
+if(s){
+	var coordinates = String(datacsv).split("\n");
+	var data = "[";
+	for(var j = 0; j <= coordinates.length;j++){
+		if(String(coordinates[j]).length < 10) continue;
+		if(data.length > 5) data += ',';
+		data += '[' + coordinates[j] + ']';
+	}
+	data += "]";
+	var points = turf.points(JSON.parse(data));
+	console.log(points);
+	//var terulet = turf.concave(points).geometry.coordinates[0];
+	var terulet = turf.convex(points,{concavity: document.getElementById("concavity").value}).geometry.coordinates[0];
+	datacsv = "";
+	for(var j = 0; j <= terulet.length; j++){
+		if(!terulet[j]) continue	;
+		console.log(j);
+		console.log(terulet[j]);
+		datacsv += terulet[j][0];
+		datacsv += ',';
+		datacsv += terulet[j][1];
+		datacsv += ',0 ';
+	}
+}
+datacsv = datacsv.replaceAll('\n',' ');
+
+console.log(document.getElementById('foldnev'+i));
+
+const blob = new Blob(
+		[`<?xml version="1.0" encoding="utf-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>\n
+    <Placemark>\n
+    <Style>
+    	<PolyStyle><color>80`+ Math.floor(Math.random()*4194303).toString(16)+
+	`</color><fill>1</fill><outline>1</outline>
+        </PolyStyle>
+    </Style>
+      <name>` + document.getElementById('foldnev'+i).value +'</name>\n'+
+'      <Polygon>\n'+
+'         <tessellate>1</tessellate>\n'+
+'         <outerBoundaryIs>\n'+
+'            <LinearRing>\n'+
+'	       <coordinates>'+ 
+	(datacsv +'</coordinates>\n').replace(' </','</')+
+'            </LinearRing>\n'+
+'         </outerBoundaryIs>\n'+
+'      </Polygon>\n'+
+'   </Placemark>\n'+
+' </Document>\n'+
+'</kml>']
+		, {type: 'plain/text' });
+const fileUrl = URL.createObjectURL(blob);
+element.setAttribute('href', fileUrl);
+console.log(document.getElementById('foldnev'+i));
+element.setAttribute('download',document.getElementById('foldnev'+i).value+'.kml');
+element.style.display = 'none';
+document.body.appendChild(element);
+element.click();
+document.body.removeChild(element);
+}
+
+
+
+</script>
+
+</html>
