@@ -119,7 +119,7 @@ function displayResults(){
   map.panTo(turf.center(polygon).geometry.coordinates, {duration: 2000});
 }
 function szamol(){
-	var lines = document.getElementById('EOVIN').value.split('\n');
+	var lines = document.getElementById('EOVIN').value.replaceAll("\t"," ").split('\n');
 	var splitby=' ';
 	for(var i = 0; i <= lines.length;i++){
 		if(i != lines.length){
