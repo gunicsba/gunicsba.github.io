@@ -8,35 +8,84 @@
 <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
 <!-- <script src="https://api.mapbox.com/mapbox.js/plugins/turf/v3.0.11/turf.min.js"></script> -->
 <script src='libs/turf.min.js'></script>
-<style type="text/css">
-	body {
-  margin: 0;
-  padding: 0;
-}
-
-#map {
-	height: 300px;
-}
-#nomap {
-	position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 100%;
-}
-</style>
+ <style>
+        body {
+            font-family: Arial, sans-serisf;
+            margin: 20px;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        h1, h3 { 
+            color: #333;
+            text-align: center;
+        }
+        .container {
+            max-width: 800px;
+            margin: auto;
+            padding: 10px;
+        }
+        textarea, input[type="text"], input[type="file"], input[type="button"], input[type="submit"], button {
+            padding: 8px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            width: calc(100% - 20px);
+            box-sizing: border-box;
+        }
+        textarea {
+            resize: vertical;
+            background-color:  #d4e6f1 ;
+        }
+        button, input[type="button"] {
+            background-color:  #5499c7 ;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color:  #7fa92a ;
+        }
+                /* Placeholder style */
+        ::-webkit-input-placeholder {
+            color: #7fa92a;
+        }
+        :-moz-placeholder {
+            color: #7fa92a;
+        }
+        ::-moz-placeholder {
+            color: #7fa92a;
+        }
+        :-ms-input-placeholder {
+            color: #7fa92a;
+        }
+        #map {
+					height: 300px;
+				}
+				#nomap {
+					position: absolute;
+  				top: 0;
+  				bottom: 0;
+  				width: 100%;
+				}
+    </style>
 
 <body>
-	<a href="https://e-kerelem.mvh.allamkincstar.gov.hu/enter/webform/mekir/sajatadat/BizonylatElovalasztoMekirSajatAdat.xhtml">Elvileg ezzel nyilik</a>
+	<h1> Egységes kérelem területalapú támogatás -> AgOpen KML konverter</h1>
+	<div class="container">
 	<br>
-	F12 gombot megnyomjuk (lehet kell egy frissítés utána) aztán a Hálózat (Network) fülön:
-	<br>Keressük meg a "BizonylatElovalasztoMekirSajatAdat" majd annak a komplett válaszát másoljuk ki.
+	<a href="https://e-kerelem.mvh.allamkincstar.gov.hu/enter/webform/mekir/sajatadat/BizonylatElovalasztoMekirSajatAdat.xhtml">BizonylatElovalasztoMekirSajatAdat megnyitása (katt a képre)<img src="img/ekerelem_1.png"></img></a>
+	<br><br>
+	F12 gombot megnyomva a fejlesztői eszközöket kapcsoljuk be. Így láthatóvá válik minden adat amit a távoli szerver elküld a böngészőnek.
+	<br>Ha nem lenne meg elsőre az adat akkor frissítsük az oldalt, aztán a Hálózat (Network) fült válasszuk ki madj szűrjük le:
+	<br><br><img src="img/ekerelem_2.png"></img>
+	<br><br>Keressük meg a "BizonylatElovalasztoMekirSajatAdat" majd annak a komplett válaszát másoljuk ki.<br>
+	<br><img src="img/ekerelem_3.png"></img>
 	<br>
-	<br>(Mondjuk én ennek sok értelmét nem látom max annyira, hogy így Google earthben lehet láni milyen területeink vannak...)
+	<br><br>Azt nem tudom, hogy gyakorlati haszna lesz-e ennek. Arra bizonyosan jó, hogy egy vadidegen odataláljon a területhez.
+	<br><strong>A villanyoszlopokat egyelőre figyelmen kívül hagyjuk. </strong>(Multi KML-ként be lehetne ezeket is importálni, de szerintem nem lesz elég pontos.)
+	<br><img src="img/ekerelem_4.png"></img>
+	<br><br>Ha ez megvan akkor ide illesszük be:
 	<br>
-	Ide illesszük be:
-	<br>
-	<textarea id="EOVIN" cols=40 rows=5><?xml version='1.0' encoding...>
-	</textarea><br>
+	<textarea id="EOVIN" cols=40 rows=5 placeholder="xml version='1.0"></textarea><br>
 <!--
 		<?xml version='1.0' encoding='UTF-8'?>
 <partial-response><changes><update id="j_id1:jakarta.faces.ViewState:0"><![CDATA[7184564340482501958:6652998269046918559]]></update><eval><![CDATA[PF('TerkepNezetDlg').show(); resizeEvent(null); ;if (PF('MekirVvMap')) {PF('MekirVvMap').clearVectorLayer('tter');
@@ -51,7 +100,7 @@ PF('MekirVvMap').setLayerFeatureProperty('tter','1',{"_geomType":"Polygon","head
 } else {console.log(' a Map widget nem elérhető !');};]]></eval></changes></partial-response>
 -->
 	<input type = "button" onclick = "szamol()"  value = "Bemenet tablazatra alakitasa!"></input>->
-	<input type = "button" onclick = "szamolfoldBulk1()" value = "Összes EOV átszámolása WGS84-re"></td> 
+	<!--<input type = "button" onclick = "szamolfoldBulk1()" value = "Összes EOV átszámolása WGS84-re"></td> -->
 	<br>Várj picit majd:
 <ul>
   <li><input type = "button" onclick = "displayField1()" value = "Összes megjelenítése térképen"></td> Tájékozódáshoz, nem ugyan úgy mutatja mint Google Earth </li>
@@ -69,6 +118,7 @@ PF('MekirVvMap').setLayerFeatureProperty('tter','1',{"_geomType":"Polygon","head
 		<input type = "button" onclick = "downloadAsKML('KOMBI',true)" value = "Egyesített KML"></input>;
 		<input type = "button" onclick = "displayField('KOMBI')" value = "Megjelenit"></input>;
 </div>
+</div> <!-- container -->
 </body>
 
 <script type="text/javascript">
@@ -124,6 +174,7 @@ function szamol(){
 //	console.log(input[0].discreteProducts);
 	var htmltext = "<table> ";
 	htmltext += "<thead><td>ID</td>";
+	htmltext += "<td>Terület elnevezése</td>";
 	htmltext += "<td>EOV koordinatak</td>";
 	htmltext += "<td></td>";
 	htmltext += "<td>WGS84 koordinatak</td>";
@@ -149,6 +200,7 @@ function szamol(){
 	}
 	htmltext += "</table>";
 	document.getElementById('output').innerHTML = htmltext;
+	szamolfoldBulk1()
 
 }
 function egyesit(j) {
