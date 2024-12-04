@@ -103,7 +103,7 @@ PF('MekirVvMap').setLayerFeatureProperty('tter','1',{"_geomType":"Polygon","head
 	<!--<input type = "button" onclick = "szamolfoldBulk1()" value = "Összes EOV átszámolása WGS84-re"></td> -->
 	<br>Várj picit majd:
 <ul>
-  <li><input type = "button" onclick = "displayField1()" value = "Összes megjelenítése térképen"></td> Tájékozódáshoz, nem ugyan úgy mutatja mint Google Earth </li>
+  <li><input type = "button" onclick = "displayField1()" value = "Összes megjelenítése térképen"></td> Tájékozódáshoz, nem biztos, hogy ugyan úgy mutatja mint Google Earth </li>
   <li><input type = "button" onclick = "downloadAsKML1()" value = "Összes letöltése 1 KML-ben"></td> </li>
   <li><input type = "button" onclick = "downloadAsKML2()" value = "Fájlok letöltése KML-ben"></td> (Ez utóbbi sajnos lehet csak az első 10 fájlt fogja letölteni :( )</li>
 </ul>
@@ -111,13 +111,14 @@ PF('MekirVvMap').setLayerFeatureProperty('tter','1',{"_geomType":"Polygon","head
 <div id="map"></div>
 <div id="output"></div>
 <hr>
-<div id="kombi">
+<!--<div id="kombi">
 		<div id="foldnevKOMBI">kombinalt</div>
 		<textarea id='WGS84OUTKOMBI' cols='30'></textarea>;
 		Erzekenyseg megjelenítéshez, konvertáláshoz, KMLhez: <input id="concavity" type="number" value="1"></input>;
 		<input type = "button" onclick = "downloadAsKML('KOMBI',true)" value = "Egyesített KML"></input>;
 		<input type = "button" onclick = "displayField('KOMBI')" value = "Megjelenit"></input>;
 </div>
+-->
 </div> <!-- container -->
 </body>
 
@@ -284,7 +285,8 @@ function displayField(j){
 	console.log(points);
 	console.log(turf.convex(points).geometry);
 	console.log(turf.convex(points).geometry.coordinates[0]);
-	tempGeo.geometry.coordinates = turf.convex(points,{concavity: document.getElementById("concavity").value}).geometry.coordinates[0];
+//	tempGeo.geometry.coordinates = turf.convex(points,{concavity: document.getElementById("concavity").value}).geometry.coordinates[0];
+
 	if(map.getSource('overlay'+j)){
 		map.removeLayer('overlay'+j); 
 		map.removeSource('overlay'+j);
