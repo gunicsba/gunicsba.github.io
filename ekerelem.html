@@ -280,7 +280,7 @@ function displayField(j){
 	data += "]";
 	var tempGeo = geoSample;
 	console.log(JSON.parse(data));
-//	tempGeo.geometry.coordinates = JSON.parse(data);
+	tempGeo.geometry.coordinates = JSON.parse(data);
 	var points = turf.points(JSON.parse(data));
 	console.log(points);
 	console.log(turf.convex(points).geometry);
