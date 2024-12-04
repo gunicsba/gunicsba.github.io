@@ -198,12 +198,12 @@ function displayField(j){
 	data += "]";
 	var tempGeo = geoSample;
 	console.log(JSON.parse(data));
-//	tempGeo.geometry.coordinates = JSON.parse(data);
+	tempGeo.geometry.coordinates = JSON.parse(data);
 	var points = turf.points(JSON.parse(data));
 	console.log(points);
 	console.log(turf.convex(points).geometry);
 	console.log(turf.convex(points).geometry.coordinates[0]);
-	tempGeo.geometry.coordinates = turf.convex(points,{concavity: document.getElementById("concavity").value}).geometry.coordinates[0];
+	//tempGeo.geometry.coordinates = turf.convex(points,{concavity: document.getElementById("concavity").value}).geometry.coordinates[0];
 	if(map.getSource('overlay'+j)){
 		map.removeLayer('overlay'+j); 
 		map.removeSource('overlay'+j);
