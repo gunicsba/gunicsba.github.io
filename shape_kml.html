@@ -83,7 +83,7 @@
         const zip = await JSZip.loadAsync(file);
 
         // Create an object to hold the .shp and .dbf files (ignore .prj)
-        const shapefileData = {};
+        var shapefileData = {shp : [], dbf : [], name: []};
 
         // Iterate through the files in the ZIP and remove .prj files
         zip.forEach((relativePath, zipEntry) => {
@@ -92,24 +92,13 @@
             return;
           }
           if (relativePath.toLowerCase().endsWith(".shp")) {
-            shapefileData.shp = zipEntry.async("arraybuffer");
+            shapefileData.shp.push(zipEntry.async("arraybuffer"));
+            shapefileData.name.push(relativePath.toLowerCase().replace(".shp",""))
           } else if (relativePath.toLowerCase().endsWith(".dbf")) {
-            shapefileData.dbf = zipEntry.async("arraybuffer");
+            shapefileData.dbf.push(zipEntry.async("arraybuffer"));
           }
         });
 
-        // Wait for both the .shp and .dbf files to be read into ArrayBuffers
-        const [shpArrayBuffer, dbfArrayBuffer] = await Promise.all([shapefileData.shp, shapefileData.dbf]);
-
-        // Create an object with the .shp and .dbf properties for shp.js
-        const shapefile = { shp: shpArrayBuffer, dbf: dbfArrayBuffer };
-
-        // Load and parse the shapefile from the ArrayBuffer
-        const geojson = await shp(shapefile);
-
-        // Extract coordinates from all features
-        const coordinates = geojson.features.map(feature => feature.geometry.coordinates);
-        
         var htmltext = "<table> ";
         htmltext += "<thead>";
         //<td>ID</td>
@@ -120,13 +109,35 @@
         htmltext += "<td>WGS84 koordinatak</td>";
         htmltext += "<td>Letöltes</td>";
         htmltext += "</thead>";
-
         var i = 0;
+
+        console.log(shapefileData);
+      for( var k = 0 ; k < shapefileData.shp.length; k++) { 
+        // Wait for both the .shp and .dbf files to be read into ArrayBuffers
+        const [shpArrayBuffer, dbfArrayBuffer] = await Promise.all([shapefileData.shp[k], shapefileData.dbf[k]]);
+
+        // Create an object with the .shp and .dbf properties for shp.js
+        const shapefile = { shp: shpArrayBuffer, dbf: dbfArrayBuffer };
+
+        // Load and parse the shapefile from the ArrayBuffer
+        const geojson = await shp(shapefile);
+
+        // Extract coordinates from all features
+        const coordinates = geojson.features.map(feature => feature.geometry.coordinates);
+        
+
         for(var feature of geojson.features) {
           console.log(feature);
           htmltext += "<tr>";
 //          htmltext += "<td>" + i +"</td>";
-          htmltext += "<td id='telepules"+i+"'>" + feature.properties.telepules+"</td>";
+          if(feature.properties.telepules != undefined) {
+              htmltext += "<td id='telepules"+i+"'>" + feature.properties.telepules+"</td>";
+          } if(shapefileData.name[k] == "minosegi_osztaly") {
+             htmltext += "<td id='telepules"+i+"'>minosegi osztaly:" + feature.properties.min_oszt  
+             htmltext += " muvel_ag_k:"+ feature.properties.muvel_ag_k + "</td>";
+          } else {
+             htmltext += "<td id='telepules"+i+"'>" +shapefileData.name[k] +"</td>";
+          }
           htmltext += "<td id='foldnev"+i+"'>" + feature.properties.hrsz+"</td>";
           htmltext += "<td>  ";
           htmltext += Math.round(feature.properties.terulet_m2/1000)/10; 
@@ -145,6 +156,7 @@
           htmltext +="</tr>";
           i++;
         }
+      }
         htmltext += "</table>";
         htmltext += '<br><button onclick = "downloadAsKML1()">Összes letöltése 1 KML-ben</button></td>';
         document.getElementById('output').innerHTML = htmltext;
