@@ -68,28 +68,30 @@
     </style>
 </head>
 <body>
-  <h1>AgOpen AllFields.kml konvertálása shapefileba</h1>
+  <h1>KML fájlok konvertálása shapefileba</h1>
   <div class="container">
-  <p>Ezen oldal segítségével lehetőségünk van az AgOpenGPS által készített határvonalakat SHP avagy Shape formátumba hozni. Az AKG és az Egységes Kérelemhez "EOV koordinátákkal körbehatárolt" terület szükséges. Az EOV koordinátarendszerbe történő átváltáshoz szükséges egy javítórács használata. Ezt mi az <a href="https://eht2.gnssnet.hu/">EHT2 API</a> segítségével fogjuk megoldani, mert ez garantálja a pontos átváltást. A generált fájlok .zip kiterjesztéssel vannak és a .prj azaz projekciós fájl azonos a geoshop.hu által letöltött állomány projekciós fájljával.
+  <p>Ezen oldal segítségével lehetőségünk van az AgOpenGPS és Mezőnavigátor által készített határvonalakat SHP avagy Shape formátumba hozni. Az AKG és az Egységes Kérelemhez "EOV koordinátákkal körbehatárolt" terület szükséges. Az EOV koordinátarendszerbe történő átváltáshoz szükséges egy javítórács használata. Ezt mi az <a href="https://eht2.gnssnet.hu/">EHT2 API</a> segítségével fogjuk megoldani, mert ez garantálja a pontos átváltást. A generált fájlok .zip kiterjesztéssel vannak és a .prj azaz projekciós fájl azonos a geoshop.hu által letöltött állomány projekciós fájljával.
   <br><br>
-  Listázza az összes területet. Ezekhez tartozó KÜLSŐ és BELSŐ határvonalból tudunk WGS84 és EOV alapú shape fájlokat készíteni.
+  Listázza az összes területet. Ezekhez tartozó KÜLSŐ és AgOpen esetén BELSŐ határvonalból tudunk WGS84 és EOV alapú shape fájlokat készíteni.
   Van lehetőség csak a külsőt használni és a többit figyelmen kívül hagyni.
-  <br><br>Ami még (szerintem) jó lenne:
-     <li/> A zip fájlban ne POLYGON.shp hanem a rendes területnév szerepeljen.
-  <br><br>
+<br>
   Egységes kérelemnél úgy tűnik jó de <strong>csak külső</strong> határt tudja kezelni.
   <br>
   Egyéb felületekkel tesztelés szükséges.
   <br>
   <br>Ha bármi hiba lenne akkor <a href="https://github.com/gunicsba/gunicsba.github.io/issues">itt jelezhetitek</a>.
   <br><br>
-  A kiválasztandó fájl alapból a <strong>Dokumentumok/AgOpenGPS/Fields/AllFields.kml</strong> alatt található.
+  A kiválasztandó fájl alapból a <strong>Dokumentumok/AgOpenGPS/Fields/AllFields.kml</strong> alatt található. Illetve támogatott a sima <strong>Fields.kml</strong> is.<br>
+  Mezőnavigátorból nem tudom, hogyan jön ki a KML de mivel kaptam mintát így az is támogatva van :)
   <input type="file" id="kmlfileInput" accept=".kml" />
   <br>
-  <button id="processBtn">Területek listázása</button>
+  <button id="processBtn">Területek listázása (AgOpen)</button>
+  <button id="processBtnMG">Területek listázása (Mezőnavigátor)</button>
   <br>
   <div id="output"></div>
-
+  <br><br>Ami még (szerintem) jó lenne:
+     <li/> A zip fájlban ne POLYGON.shp hanem a rendes területnév szerepeljen.
+  <br>
  <script>
     document.getElementById('processBtn').addEventListener('click', async () => {
       const fileInput = document.getElementById('kmlfileInput');
@@ -171,6 +173,85 @@
           }
 
         }
+        output += "</table>";
+        console.log(output);
+        document.getElementById("output").innerHTML = output;
+        for(var i = 0; i < 1000; i++){
+          if(document.getElementById('WGS84_'+i) != null)
+          szamolfoldBulk(i);
+        }
+      };
+
+      reader.onerror = function() {
+        document.getElementById("output").textContent = "Error reading file.";
+      };
+  
+      reader.readAsText(file); // Start reading the file
+
+    })
+  </script>
+ <script>
+    document.getElementById('processBtnMG').addEventListener('click', async () => {
+      const fileInput = document.getElementById('kmlfileInput');
+      const file = fileInput.files[0];
+      const output1 = document.getElementById('output');
+
+      if (!file) {
+        output1.textContent = "Nincs fájl kiválasztva!!";
+        return;
+      }
+
+
+      const reader = new FileReader();
+      var output = "";
+      // Read the file as text
+      reader.onload = function(e) {
+        const xmlString = e.target.result;
+  
+        // Parse XML
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlString, "text/xml");
+        const kmlNamespace = "http://www.opengis.net/kml/2.2";
+        var i = 0;
+
+        // Extract specific data (e.g., Folder names, descriptions, and coordinates)
+
+        output += "<table><thead><td>Terület név</td><td>WGS84 koordináták<br>külső<br>belső</td><td>WGS84 alapú SHP</td><td>EOV koordináták<br>külső<br>belső</td><td>EOV alapú SHP</td><td/></thead>";
+
+            // Find Placemark elements inside the Boundaries folder
+            const placemarks = xmlDoc.getElementsByTagNameNS(kmlNamespace, "Placemark");
+            var innerboundary = "";
+            for (let placemark of placemarks) {
+              console.log(placemark);
+              const coordinates = placemark.getElementsByTagNameNS(kmlNamespace, "coordinates")[0]?.textContent.trim() || "No coordinates";
+              if(coordinates === "No coordinates") {
+                continue;
+              }
+              const placemarkName = placemark.getElementsByTagNameNS(kmlNamespace, "name")[0]?.textContent || "";
+              output += "<tr><td id='name_"+i+"'>" + placemarkName.trim() + "</td>";
+                output += "<td><textarea id='WGS84_"+i+"'>"+ coordinates.replaceAll(" ","\n") + "</textarea>";
+                output += "<textarea id='WGS84INNER_"+i+"'>INNERBOUNDARYINNERBOUNDARY</textarea></td>";
+                output += '<td>';
+                output += '<input type = "button" class="buttonwide" onclick = "downloadAsWGS84SHP('+i+',false)" value = "Csak külső  ">';
+                output += '<br>';
+                output += '<input type = "button" class="buttonwide" onclick = "downloadAsWGS84SHP('+i+',true)" value = "Külső + belső  ">';
+                output += '</td>';
+//                output += '<input type = "button" class="buttonwide" onclick = "szamolfoldBulk('+i+')" value = "-> "></td>';
+                output += "<td><textarea id='EOV_"+i+"'></textarea>";
+                output += "<textarea id='EOVINNER_"+i+"'></textarea></td>";
+                output += '<td>';
+                output += '<input type = "button" class="buttonwide" onclick = "downloadAsEOVSHP('+i+',false)" value = "Csak külső   ">';
+                output += '<br>';
+                output += '<input type = "button" class="buttonwide" onclick = "downloadAsEOVSHP('+i+',true)" value = "Külső + belső   ">';
+                output += '</td>';
+                output += '<td>'+coordinates.length+'</td>';
+              output += "</tr>";
+              i++;
+            }
+            output = output.replaceAll("INNERBOUNDARYINNERBOUNDARY",innerboundary);
+
+
+
         output += "</table>";
         console.log(output);
         document.getElementById("output").innerHTML = output;
