@@ -132,15 +132,26 @@
 //          htmltext += "<td>" + i +"</td>";
           if(feature.properties.telepules != undefined) {
               htmltext += "<td id='telepules"+i+"'>" + feature.properties.telepules+"</td>";
-          } if(shapefileData.name[k] == "minosegi_osztaly") {
+          } else if(shapefileData.name[k] == "minosegi_osztaly") {
              htmltext += "<td id='telepules"+i+"'>minosegi osztaly:" + feature.properties.min_oszt  
              htmltext += " muvel_ag_k:"+ feature.properties.muvel_ag_k + "</td>";
           } else {
-             htmltext += "<td id='telepules"+i+"'>" +shapefileData.name[k] +"</td>";
+            htmltext += "<td id='telepules"+i+"'>" +shapefileData.name[k] +"</td>";
           }
-          htmltext += "<td id='foldnev"+i+"'>" + feature.properties.hrsz+"</td>";
+
+          if(feature.properties.hrsz != undefined) {
+            htmltext += "<td id='foldnev"+i+"'>" + feature.properties.hrsz+"</td>";
+          } else if(feature.properties.Polazon != undefined) {
+            htmltext += "<td id='foldnev"+i+"'>" + feature.properties.Bloaz +"__" + feature.properties.Polazon+"</td>";
+          } else {
+            htmltext += "<td id='foldnev"+i+"'>Ismeretlen</td>";
+          }
           htmltext += "<td>  ";
-          htmltext += Math.round(feature.properties.terulet_m2/1000)/10; 
+          if(feature.properties.terulet_m2 != undefined) {
+            htmltext += Math.round(feature.properties.terulet_m2/1000)/10; 
+          } else {
+            htmltext += feature.properties.Polter;
+          }
           htmltext += "ha</td><td><textarea id='eov_"+i+"' cols='20'>";
           console.log(feature.geometry.coordinates);
           for(var koordinatapar of feature.geometry.coordinates[0]){
