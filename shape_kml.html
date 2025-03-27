@@ -62,6 +62,12 @@
   <div class="container">
   <p>Válasszuk ki a zip fájlt amit a <a href="https://geoshop.hu">geoshop.hu</a>-n vásároltunk. Ebben ugyan van egy .prj fájl de ezt mi figyelmen kívül hagyjuk ugyanis az <a href="https://eht2.gnssnet.hu/">EHT2 API</a> segítségével fogjuk az EOV -> WGS84 konvertálást megcsinálni. <br><br>És pontosabb mint a Google Earth vagy QGIS.</p>
   <hr>
+  <label for="prj">Forrás formátum:</label>
+
+<select name="prj" id="prj">
+  <option value="EOV">EOV</option>
+  <option value="WGS84">WGS84</option>
+</select>
   <input type="file" id="shapefileInput" accept=".zip" />
   <button id="processBtn">Számolj!</button>
   <pre id="output"></pre>
@@ -89,7 +95,7 @@
         zip.forEach((relativePath, zipEntry) => {
           if (relativePath.toLowerCase().endsWith(".prj")) {
             // Simply skip over .prj files, effectively removing them
-            return;
+            if(document.getElementById('prj').value == "EOV") return;
           }
           if (relativePath.toLowerCase().endsWith(".shp")) {
             shapefileData.shp.push(zipEntry.async("arraybuffer"));
@@ -160,7 +166,13 @@
           }
           htmltext += "</textarea></td>";
 //          htmltext += '<td><input type = "button" onclick = "szamolfold('+i+')" value = "Szamolj>>"></td>'
-          htmltext += "<td><textarea id='WGS84OUT"+i+"' cols='30'></textarea></td>";
+          htmltext += "<td><textarea id='WGS84OUT"+i+"' cols='30'>"
+          for(var koordinatapar of feature.geometry.coordinates[0]){
+            if(document.getElementById('prj').value == "WGS84") {
+              htmltext += koordinatapar +"\n";  
+            }
+          }
+          htmltext += "</textarea></td>";
           htmltext += '<td><input type = "button" onclick = "downloadAsKML('+i+')" value = "KML">';
 //          htmltext += '<input type = "button" onclick = "displayField('+i+')" value = "Megjelenit"><input type = "button" onclick = "egyesit('+i+')" value = "Kombinalt">';
           htmltext += '</td>';
@@ -171,7 +183,9 @@
         htmltext += "</table>";
         htmltext += '<br><button onclick = "downloadAsKML1()">Összes letöltése 1 KML-ben</button></td>';
         document.getElementById('output').innerHTML = htmltext;
-        szamolfoldBulk1();
+        if(document.getElementById('prj').value == "EOV"){
+          szamolfoldBulk1();
+        }
 
         // Display the coordinates in the output area
         //output.textContent = JSON.stringify(coordinates, null, 2);
@@ -410,7 +424,7 @@ const blob = new Blob(
 const fileUrl = URL.createObjectURL(blob);
 element.setAttribute('href', fileUrl);
 console.log(document.getElementById('foldnev'+i));
-element.setAttribute('download',document.getElementById('foldnev'+i).innerHTML+'.kml');
+element.setAttribute('download',document.getElementById('telepules'+i).innerHTML+"_"+document.getElementById('foldnev'+i).innerHTML+'.kml');
 element.style.display = 'none';
 document.body.appendChild(element);
 element.click();
