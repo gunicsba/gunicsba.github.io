@@ -1,0 +1,11 @@
+release/dialog1.o
+release/dialog2.o
+release/dialog3.o
+release/main.o
+release/reminderwidget.o
+release/widget.o
+release/moc_dialog1.o
+release/moc_dialog2.o
+release/moc_dialog3.o
+release/moc_reminderwidget.o
+release/moc_widget.o
