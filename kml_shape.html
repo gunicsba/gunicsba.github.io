@@ -478,8 +478,15 @@ function szamolfoldBulk(j) {
         obj.lat = Number(eov[1]);
         obj.lon = Number(eov[0]);
         obj.h = 0;
-        obj.remark = "";
-        jsonArray.push(obj);
+//        obj.remark = "";
+        if(lines.length < 1500 || i < 10 || i > lines.length - 50) {
+            jsonArray.push(obj);
+        } else //we have too many lines...
+          {
+            if(i % 2 == 0) {
+              jsonArray.push(obj);
+          }
+        }
 //      document.getElementById('WGS84OUT'+j).value+= i+' \n';
     } else {
         jsonArray.push(jsonArray[0]);
@@ -504,7 +511,16 @@ function szamolfoldBulk(j) {
           obj.lon = Number(eov[0]);
           obj.h = 0;
           obj.remark = "";
-          jsonArray.push(obj);
+          if(lines.length < 1500 || i < 10 || i > lines.length - 50) {
+            jsonArray.push(obj);
+          } else //we have too many lines...
+          {
+            if(i % 2 == 0) {
+              jsonArray.push(obj);
+            }
+          }
+          
+          
   //      document.getElementById('WGS84OUT'+j).value+= i+' \n';
       } else {
   //      document.getElementById('WGS84OUT'+j).value+=(i+1)+' \n';
