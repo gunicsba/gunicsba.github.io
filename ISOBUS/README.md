@@ -28,5 +28,14 @@ so TC could be adapter 2 or if you have 2 tablets then it'll be adapter 1.
 
 If multiple TC is present we're #0 so make sure others claim their numbers higher.
 
+Task controller:
+monosem OK
+kverneland OK
+Berthoud ecTronic OK
+Müller MIDI sprayer OK
+
+Vaderstad tempo FAIL
+Gaspardo spreader TC ?
+
 
 
