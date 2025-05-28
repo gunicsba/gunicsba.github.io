@@ -7,6 +7,9 @@ https://www.aliexpress.com/item/1005006000190091.html
 
 You'll need the official driver:
 https://www.peak-system.com/Drivers.523.0.html?&L=1
+## CPC 9pin connector 
+
+https://a.aliexpress.com/_EJtURj8
 
 ## RS232 adapter (to steal GPS data from tractor)
 https://www.aliexpress.com/item/1005006026595453.html
