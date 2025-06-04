@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="hu">
 <head>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.0/jszip.min.js"></script>
   <meta charset="UTF-8">
   <title>John Deere MasterData.xml Parser és KML Export</title>
   <style>
@@ -13,7 +14,8 @@
 <body>
   <h1>John Deere MasterData.xml Parser + KML Export</h1>
   <input type="file" id="fileInput" accept=".xml">
-  <button id="exportAllBtn" disabled>Minden Nyomvonal KML-be exportálása</button>
+  <button id="exportAllBtn" disabled>Single KML export</button>
+  <button id="exportZipBtn" disabled>Individual KML export into ZIP</button>
   <div id="output"></div>
 
   <script>
@@ -102,7 +104,7 @@
             <td>${aCoord}</td>
             <td>${bCoord}</td>
             <td>${heading ? heading.getAttribute("Value") : ""}</td>
-            <td><button onclick="downloadKML('${removeDiacritics(fieldName)}', createKML('${fieldName}', fieldGroups['${fieldName}']))">Letöltés</button></td>
+            <td><button onclick="downloadKML('${removeDiacritics(fieldName)}', createKML('${fieldName}', fieldGroups['${fieldName}']))">Download</button></td>
           </tr>`);
         }
 
@@ -115,6 +117,7 @@
 
         document.getElementById("output").innerHTML = tableHTML;
         document.getElementById("exportAllBtn").disabled = false;
+        document.getElementById("exportZipBtn").disabled = false;
       };
       reader.readAsText(file);
     });
@@ -125,8 +128,26 @@
     });
 
     function removeDiacritics(str) {
- 	 return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[.,]/g, '_');
-	}
+ 	    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[.,]/g, '_');
+	  }
+
+    document.getElementById("exportZipBtn").addEventListener("click", () => {
+      const zip = new JSZip();
+    
+      for (const [fieldName, tracks] of Object.entries(fieldGroups)) {
+        const safeName = removeDiacritics(fieldName).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 50);
+        const kmlContent = createKML(fieldName, tracks, false);
+        zip.file(safeName + ".kml", kmlContent);
+      }
+    
+      zip.generateAsync({ type: "blob" }).then(function (blob) {
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "all_fields_kml.zip";
+        link.click();
+        URL.revokeObjectURL(link.href);
+      });
+    });
   </script>
 </body>
 </html>
