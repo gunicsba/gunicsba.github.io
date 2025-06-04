@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <title>John Deere MasterData.xml Parser és KML Export</title>
+  <style>
+    table { border-collapse: collapse; width: 100%; margin-top: 1em; }
+    th, td { border: 1px solid #aaa; padding: 6px; text-align: left; }
+    th { background-color: #f0f0f0; }
+    button { padding: 4px 8px; margin: 0; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>John Deere MasterData.xml Parser + KML Export</h1>
+  <input type="file" id="fileInput" accept=".xml">
+  <button id="exportAllBtn" disabled>Minden Nyomvonal KML-be exportálása</button>
+  <div id="output"></div>
+
+  <script>
+    var fieldGroups = {};
+
+    function createKML(fieldName, tracks, foldered = false) {
+      const kmlHeader = `<?xml version="1.0"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document>`;
+      const kmlFooter = `</Document>\n</kml>`;
+      let kmlBody = foldered ? '' : `<name>${fieldName}</name>`;
+
+      if (foldered) {
+        for (const [field, items] of Object.entries(tracks)) {
+          kmlBody += `<Folder><name>${field}</name>`;
+          for (const trk of items) {
+            kmlBody += `<Placemark><name>${trk.name}</name><LineString><tessellate>1</tessellate><coordinates>${trk.coordinates}</coordinates></LineString></Placemark>`;
+          }
+          kmlBody += `</Folder>`;
+        }
+      } else {
+        for (const trk of tracks) {
+          kmlBody += `<Placemark><name>${trk.name}</name><LineString><tessellate>1</tessellate><coordinates>${trk.coordinates}</coordinates></LineString></Placemark>`;
+        }
+      }
+      return kmlHeader + kmlBody + kmlFooter;
+    }
+
+    function downloadKML(name, content) {
+      const blob = new Blob([content], { type: "application/vnd.google-earth.kml+xml" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name + ".kml";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    document.getElementById('fileInput').addEventListener('change', function (event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const xmlText = e.target.result;
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlText, "application/xml");
+        const nsResolver = function (prefix) {
+          if (prefix === "ns") return "urn:schemas-johndeere-com:Setup";
+          return null;
+        };
+        const ns = "urn:schemas-johndeere-com:Setup";
+        const fieldMap = {};
+
+        // Field mapping
+        const fields = xmlDoc.evaluate("//ns:Field", xmlDoc, nsResolver, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+        for (let i = 0; i < fields.snapshotLength; i++) {
+          const field = fields.snapshotItem(i);
+          fieldMap[field.getAttribute("StringGuid")] = field.getAttribute("Name");
+        }
+
+        // AB Line processing
+        const abLines = xmlDoc.evaluate("//ns:ABLine", xmlDoc, nsResolver, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+        fieldGroups = {}; // reset
+        const tableRows = [];
+
+        for (let i = 0; i < abLines.snapshotLength; i++) {
+          const ab = abLines.snapshotItem(i);
+          const name = ab.getAttribute("Name") || "";
+          const taggedEntity = ab.getAttribute("TaggedEntity") || "";
+          const fieldName = fieldMap[taggedEntity] || "Unknown";
+          const modifDate = ab.getAttribute("LastModifiedDate") || "";
+
+          const a = ab.getElementsByTagNameNS(ns, "APoint")[0];
+          const b = ab.getElementsByTagNameNS(ns, "BPoint")[0];
+          const heading = ab.getElementsByTagNameNS(ns, "Heading")[0];
+
+          if (!(a && b)) continue;
+          const aCoord = `${a.getAttribute("Longitude")},${a.getAttribute("Latitude")},0`;
+          const bCoord = `${b.getAttribute("Longitude")},${b.getAttribute("Latitude")},0`;
+
+          if (!fieldGroups[fieldName]) fieldGroups[fieldName] = [];
+          fieldGroups[fieldName].push({ name, coordinates: `${aCoord} ${bCoord}` });
+
+          tableRows.push(`<tr>
+            <td>${fieldName}</td>
+            <td>${name}</td>
+            <td>${modifDate}</td>
+            <td>${aCoord}</td>
+            <td>${bCoord}</td>
+            <td>${heading ? heading.getAttribute("Value") : ""}</td>
+            <td><button onclick="downloadKML('${removeDiacritics(fieldName)}', createKML('${fieldName}', fieldGroups['${fieldName}']))">Letöltés</button></td>
+          </tr>`);
+        }
+
+        const tableHTML = `<table>
+          <thead>
+            <tr><th>Field Name</th><th>AB Line</th><th>Modifed Date</th><th>APoint</th><th>BPoint</th><th>Heading</th><th>KML</th></tr>
+          </thead>
+          <tbody>${tableRows.join("")}</tbody>
+        </table>`;
+
+        document.getElementById("output").innerHTML = tableHTML;
+        document.getElementById("exportAllBtn").disabled = false;
+      };
+      reader.readAsText(file);
+    });
+
+    document.getElementById("exportAllBtn").addEventListener("click", () => {
+      const kml = createKML("All Fields", fieldGroups, true);
+      downloadKML("all_tracks_grouped", kml);
+    });
+
+    function removeDiacritics(str) {
+ 	 return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[.,]/g, '_');
+	}
+  </script>
+</body>
+</html>
