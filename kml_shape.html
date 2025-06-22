@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -88,6 +89,7 @@
   <button id="processBtn">Területek listázása (AgOpen)</button>
   <button id="processBtnMG">Területek listázása (DJI Mezőnavigátor)</button>
   <br>
+<button id="processBtnFarmTRX">Területek exportalasa wgs84 shp</button><br>
   <div id="output"></div>
   <br><br>Ami még (szerintem) jó lenne:
      <li/> A zip fájlban ne POLYGON.shp hanem a rendes területnév szerepeljen.
@@ -191,6 +193,105 @@
     })
   </script>
  <script>
+document.getElementById('processBtnFarmTRX').addEventListener('click', async () => {
+addInner = false;
+
+  const geojson = {
+      "type": "FeatureCollection",
+      "features": [
+        
+      ]
+    };
+for (var j = 0; j < 500 ; j++) {
+  if(document.getElementById('WGS84_'+j) == null ) continue;
+  var lines = document.getElementById('WGS84_'+j).value.split("\n");
+ var feature = {
+          "type": "Feature",
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": []
+          },
+          "properties": {
+            "name": "TODO teszt"
+          }
+        }
+  feature.properties.id=j;
+  feature.properties.name=document.getElementById('name_'+j).innerHTML;
+
+ 
+
+  var jsonArray = [];
+  for(var i = 0; i <= lines.length;i++){
+    if( lines[i] == undefined || lines[i].length < 10) continue;
+    if(i != lines.length){
+      var splitby  = ',';
+      var wgs = lines[i].split(splitby);
+      var obj = [];
+      obj.push(Number(wgs[0]));
+      obj.push(Number(wgs[1]));
+      jsonArray.push(obj);
+//      document.getElementById('WGS84OUT'+j).value+= i+' \n';
+    } else {
+//      document.getElementById('WGS84OUT'+j).value+=(i+1)+' \n';
+    }
+  }
+    jsonArray.push(jsonArray[0]);
+    feature.geometry.coordinates.push(jsonArray);
+
+
+  if(addInner){ //Inner Boundaries
+    var innerboundary = document.getElementById('WGS84INNER_'+j).value.split(";");
+    for(var k = 0; k < innerboundary.length; k++) {
+      jsonArray = [];
+      if( innerboundary[k] == undefined || innerboundary[k].length < 10) continue;
+      var lines = innerboundary[k].split("\n");
+      for(var i = 0; i <= lines.length;i++){
+        if( lines[i] == undefined || lines[i].length < 10) continue;
+        if(i != lines.length){
+          var splitby  = ',';
+          var wgs = lines[i].split(splitby);
+          var obj = [];
+          obj.push(Number(wgs[0]));
+          obj.push(Number(wgs[1]));
+          jsonArray.push(obj);
+    //      document.getElementById('WGS84OUT'+j).value+= i+' \n';
+        } else {
+    //      document.getElementById('WGS84OUT'+j).value+=(i+1)+' \n';
+        }
+      }
+      jsonArray.push(jsonArray[0]);
+      feature.geometry.coordinates.push(jsonArray);
+    }
+  }
+  
+   geojson.features.push(feature); 
+}
+
+  const fileName ='farmTRX';
+  
+  console.log(JSON.stringify(geojson));
+  // Function to download the shapefile as a ZIP
+  // Convert GeoJSON to Shapefile (ZIP format)
+  const shapefileBase64 = await shpwrite.zip(geojson, {folder: 'wgs84_'+fileName});
+  // Decode the Base64 content to binary
+  const shapefileBinary = base64ToArrayBuffer(shapefileBase64);
+  // Create a download link and trigger the download
+  const blob = new Blob([shapefileBinary], { type: 'application/zip' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  
+  console.log(fileName);
+  link.download = 'wgs84_'+ (addInner?'_belsokkel_':'')+fileName+'.zip'; // Name of the resulting ZIP file
+  link.click();
+
+  // Clean up the object URL
+  URL.revokeObjectURL(link.href);
+
+
+
+});
+  </script>
+ <script>
     document.getElementById('processBtnMG').addEventListener('click', async () => {
       const fileInput = document.getElementById('kmlfileInput');
       const file = fileInput.files[0];
@@ -287,6 +388,7 @@ async function downloadAsEOVSHP(j, addInner) {
         }
       ]
     };
+  geojson.features[0].properties.name='name_'+j;
 //Outer Boundary first
   var jsonArray = [];
   for(var i = 0; i <= lines.length;i++){
@@ -385,6 +487,7 @@ async function downloadAsWGS84SHP(j, addInner) {
         }
       ]
     };
+  geojson.features[0].properties.name='name_'+j;
   var jsonArray = [];
   for(var i = 0; i <= lines.length;i++){
     if( lines[i] == undefined || lines[i].length < 10) continue;
