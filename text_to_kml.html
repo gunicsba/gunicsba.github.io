@@ -22,6 +22,7 @@
   <label>Bottom-left corner (latitude, longitude):<input type="text" id="bottomLeft" placeholder="47.584276, 20.077679"></label>
   <label>Top-right corner (latitude, longitude):<input type="text" id="topRight" placeholder="47.584735, 20.079210"></label>
   <label>Rotation (degrees):<input type="number" id="rotation" value="0"></label>
+  <label>Sizing (will be filled after first run to be able to fine tune modify):<input type="number" id="scale" value="0"></label>
   <button onclick="generateKML()">Generate KML</button>
   <button onclick="downloadKML()">Download KML</button>
   <br>Once downloaded, in AgOpenGPS do open from KML (this should load the outer field boundary) then add boundaries pick Multi KML and that should add all the inner boundaries. i.e. the letters.
@@ -49,6 +50,7 @@
       const [latMin, lonMin] = document.getElementById('bottomLeft').value.split(',').map(Number);
       const [latMax, lonMax] = document.getElementById('topRight').value.split(',').map(Number);
       const rotation = parseFloat(document.getElementById('rotation').value) * Math.PI / 180;
+      var scale = parseFloat(document.getElementById('scale').value);
       const latSize = latMax - latMin;
       const lonSize = lonMax - lonMin;
       const centerLat = (latMin + latMax) / 2;
@@ -58,8 +60,11 @@
       const totalLines = lines.length;
       const lineHeight = 750;
       const fullTextHeight = totalLines * lineHeight;
-      const scale = Math.min(lonSize / 5000, latSize / fullTextHeight);
-      console.log("aa " + (lonSize / 5000) + " + " + (latSize / fullTextHeight));
+      if(scale == 0) {
+        scale = Math.min(lonSize / 10000, latSize / fullTextHeight);
+        document.getElementById('scale').value = scale;
+      }
+      console.log("aa " + (lonSize / 10000) + " + " + (latSize / fullTextHeight));
 
       let kml = `<?xml version="1.0"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n  <Document>\n`;
       kml += `    <Placemark>\n      <name>Boundary</name>\n      <Style><PolyStyle><color>1AFFFFFF</color></PolyStyle></Style>\n      <Polygon>\n        <altitudeMode>clampToGround</altitudeMode>\n        <outerBoundaryIs><LinearRing><coordinates>`;
