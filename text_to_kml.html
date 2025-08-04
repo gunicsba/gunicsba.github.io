@@ -45,7 +45,7 @@
     ];
 
     async function generateKML() {
-      const lines = document.getElementById('textInput').value.trim().split('\n');
+      const lines = document.getElementById('textInput').value.trim().split('\n').reverse();
       const [latMin, lonMin] = document.getElementById('bottomLeft').value.split(',').map(Number);
       const [latMax, lonMax] = document.getElementById('topRight').value.split(',').map(Number);
       const rotation = parseFloat(document.getElementById('rotation').value) * Math.PI / 180;
@@ -56,9 +56,10 @@
       const font = await opentype.load('https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSans/NotoSans-Regular.ttf');
 
       const totalLines = lines.length;
-      const lineHeight = 1200;
+      const lineHeight = 500;
       const fullTextHeight = totalLines * lineHeight;
-      const scale = Math.min(lonSize / 10000, latSize / fullTextHeight);
+      const scale = Math.min(lonSize / 5000, latSize / fullTextHeight);
+      console.log("aa " + (lonSize / 5000) + " + " + (latSize / fullTextHeight));
 
       let kml = `<?xml version="1.0"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n  <Document>\n`;
       kml += `    <Placemark>\n      <name>Boundary</name>\n      <Style><PolyStyle><color>1AFFFFFF</color></PolyStyle></Style>\n      <Polygon>\n        <altitudeMode>clampToGround</altitudeMode>\n        <outerBoundaryIs><LinearRing><coordinates>`;
@@ -110,6 +111,7 @@
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
       link.download = 'text.kml';
+      link.download = document.getElementById('textInput').value.trim().split('\n')[0] + ".kml";
       link.click();
     }
 
