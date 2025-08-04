@@ -53,7 +53,7 @@
       const lonSize = lonMax - lonMin;
       const centerLat = (latMin + latMax) / 2;
       const centerLon = (lonMin + lonMax) / 2;
-      const font = await opentype.load('https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSans/NotoSans-Regular.ttf');
+      const font = await opentype.load('https://cdn.jsdelivr.net/npm/webr@0.4.2/dist/vfs/usr/share/fonts/NotoSansMono-Regular.ttf');
 
       const totalLines = lines.length;
       const lineHeight = 500;
@@ -96,7 +96,7 @@
               }
             });
 
-          xOffset += width * 0.85;
+          xOffset += width * 0.95;
           if (coords.length > 2) coords.push(coords[0]);
           kml += `\n    <Placemark>\n      <name>Letter_${lineIdx}_${i}_${char.replace("<","").replace("\\","")}</name>\n\n      <Polygon>\n        <altitudeMode>clampToGround</altitudeMode>\n        <outerBoundaryIs><LinearRing><coordinates>${coords.join(' ')}</coordinates></LinearRing></outerBoundaryIs>\n      </Polygon>\n    </Placemark>\n`;
         });
