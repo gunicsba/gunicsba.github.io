@@ -15,14 +15,21 @@
       <div class="logo" aria-hidden="true">GJ</div>
       <div>
         <h1 class="title">GeoJSON eszköz</h1>
-        <p class="subtitle">Feltöltés, konvertálás és előnézet – AgOpenGPS kompatibilis formátumokhoz.</p>
+        <p class="subtitle">Feltöltés, beillesztés és validálás – AgOpenGPS kompatibilis formátumokhoz.</p>
       </div>
     </header>
 
     <section>
-      <h2>Feltöltés</h2>
+      <h2>Bevitel</h2>
       <div class="card">
         <p><input type="file" id="fileInput" accept=".json,.geojson" /></p>
+        <p>
+          <textarea id="jsonInput" rows="10" style="width:100%;font-family:monospace;font-size:14px" placeholder="Ide illeszd a GeoJSON szöveget..."></textarea>
+        </p>
+        <p>
+          <button id="pasteBtn">📋 Beillesztés vágólapról</button>
+          <button id="validateBtn">✔️ Validálás & formázás</button>
+        </p>
       </div>
     </section>
 
@@ -40,21 +47,45 @@
 
   <script>
     const fileInput = document.getElementById('fileInput');
+    const jsonInput = document.getElementById('jsonInput');
     const output = document.getElementById('output');
+    const validateBtn = document.getElementById('validateBtn');
+    const pasteBtn = document.getElementById('pasteBtn');
+
+    function showResult(text){
+      try {
+        const json = JSON.parse(text);
+        output.textContent = JSON.stringify(json, null, 2);
+        jsonInput.style.border = '2px solid green';
+      } catch(err){
+        output.textContent = "Hiba: " + err.message;
+        jsonInput.style.border = '2px solid red';
+      }
+    }
 
     fileInput.addEventListener('change', (e)=>{
       const file = e.target.files[0];
       if (!file) return;
       const reader = new FileReader();
       reader.onload = (ev)=>{
-        try {
-          const json = JSON.parse(ev.target.result);
-          output.textContent = JSON.stringify(json, null, 2);
-        } catch(err){
-          output.textContent = "Hiba: " + err.message;
-        }
+        jsonInput.value = ev.target.result;
+        showResult(ev.target.result);
       };
       reader.readAsText(file);
+    });
+
+    validateBtn.addEventListener('click', ()=>{
+      showResult(jsonInput.value);
+    });
+
+    pasteBtn.addEventListener('click', async ()=>{
+      try {
+        const text = await navigator.clipboard.readText();
+        jsonInput.value = text;
+        showResult(text);
+      } catch(err){
+        output.textContent = "Nem sikerült beilleszteni a vágólapról: " + err;
+      }
     });
   </script>
 </body>
