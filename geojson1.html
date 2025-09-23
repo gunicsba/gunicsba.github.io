@@ -34,6 +34,12 @@
     </section>
 
     <section>
+      <h2>Bemutató videó</h2>
+      <div class="card" style="overflow:hidden">
+        <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:12px">
+          <iframe src="https://www.youtube.com/em
+
+    <section>
       <h2>Eredmény</h2>
       <div class="card">
         <pre id="output" style="white-space:pre-wrap; font-size:14px; margin:0"></pre>
@@ -87,6 +93,40 @@
         output.textContent = "Nem sikerült beilleszteni a vágólapról: " + err;
       }
     });
+      function extractYouTubeID(input){
+      if(!input) return '';
+      // Accept raw ID
+      if(/^[a-zA-Z0-9_-]{11}$/.test(input)) return input;
+      try{
+        const url = new URL(input);
+        if(url.hostname.includes('youtu.be')) return url.pathname.slice(1);
+        if(url.searchParams.get('v')) return url.searchParams.get('v');
+      }catch{}
+      // Fallback: try to find 11-char ID in text
+      const m = input.match(/[a-zA-Z0-9_-]{11}/);
+      return m? m[0] : '';
+    }
+
+    function setVideoByID(id){
+      const frame = document.getElementById('ytFrame');
+      const wrap = document.getElementById('ytWrap');
+      if(id){
+        frame.src = 'https://www.youtube.com/embed/' + id;
+        wrap.style.display = '';
+      } else {
+        frame.src = '';
+        wrap.style.display = 'none';
+      }
+    }
+
+    // On load: support ?v=ID query param
+    (function(){
+      const params = new URLSearchParams(location.search);
+      const vid = extractYouTubeID(params.get('v')||'');
+      setVideoByID(vid);
+      const ytInput = document.getElementById('ytInput');
+      ytInput.addEventListener('input', ()=> setVideoByID(extractYouTubeID(ytInput.value)));
+    })();
   </script>
 </body>
 </html>
