@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GeoJSON eszköz • gunicsba</title>
+  <meta name="description" content="GeoJSON fájlok konvertálása és előnézete AgOpenGPS-hez." />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo" aria-hidden="true">GJ</div>
+      <div>
+        <h1 class="title">GeoJSON eszköz</h1>
+        <p class="subtitle">Feltöltés, konvertálás és előnézet – AgOpenGPS kompatibilis formátumokhoz.</p>
+      </div>
+    </header>
+
+    <section>
+      <h2>Feltöltés</h2>
+      <div class="card">
+        <p><input type="file" id="fileInput" accept=".json,.geojson" /></p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Eredmény</h2>
+      <div class="card">
+        <pre id="output" style="white-space:pre-wrap; font-size:14px; margin:0"></pre>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <div class="links">Készítette: <a href="https://github.com/gunicsba" target="_blank" rel="noopener">gunicsba</a> • <a href="/">Vissza a főoldalra</a></div>
+    </footer>
+  </div>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const output = document.getElementById('output');
+
+    fileInput.addEventListener('change', (e)=>{
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev)=>{
+        try {
+          const json = JSON.parse(ev.target.result);
+          output.textContent = JSON.stringify(json, null, 2);
+        } catch(err){
+          output.textContent = "Hiba: " + err.message;
+        }
+      };
+      reader.readAsText(file);
+    });
+  </script>
+</body>
+</html>
