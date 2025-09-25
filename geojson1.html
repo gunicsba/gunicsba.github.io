@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GeoJSON eszköz • gunicsba</title>
+  <meta name="description" content="GeoJSON → táblázat és KML export AgOpenGPS-hez." />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/styles.css">
+  <style>
+    /* apró táblázat finomhangolás a közös CSS fölé */
+    table{width:100%; border-collapse:collapse; font-size:14px}
+    thead th{position:sticky; top:0; background:var(--card); z-index:1}
+    th, td{border-top:1px solid rgba(148,163,184,.18); padding:8px; text-align:left}
+    tbody tr:hover{background:rgba(148,163,184,.08)}
+    .toolbar-row{display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:0 0 8px}
+    .btn{padding:8px 12px; border-radius:10px; border:1px solid rgba(148,163,184,.18); background:var(--card); cursor:pointer}
+    .btn[disabled]{opacity:.5; cursor:not-allowed}
+    .num{font-variant-numeric: tabular-nums}
+    .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace}
+    .notice{color:var(--muted); font-size:13px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo" aria-hidden="true">GJ</div>
+      <div>
+        <h1 class="title">GeoJSON → táblázat & KML</h1>
+        <p class="subtitle">Beillesztés vagy fájl, táblázat generálás, majd KML export – AgOpenGPS-hez.</p>
+      </div>
+    </header>
+
+    <section>
+      <h2>Bemutató videó</h2>
+      <div class="card" style="overflow:hidden">
+        <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:12px">
+          <iframe src="https://www.youtube.com/embed/UNA6vCzRPe8" title="YouTube videólejátszó" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="position:absolute;top:0;left:0;width:100%;height:100%"></iframe>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Bevitel</h2>
+      <div class="card">
+        <div class="toolbar-row">
+          <input type="file" id="fileInput" accept=".json,.geojson" class="btn" />
+          <button id="pasteBtn" class="btn">📋 Beillesztés vágólapról</button>
+          <span class="notice">A szöveges mezőbe illesztett GeoJSON kerül feldolgozásra.</span>
+        </div>
+        <textarea id="jsonInput" rows="10" style="width:100%;font-family:monospace;font-size:14px" placeholder="Ide illeszd a GeoJSON-t (FeatureCollection ajánlott)…"></textarea>
+        <div class="toolbar-row" style="margin-top:10px">
+          <button id="loadBtn" class="btn">✔️ Betöltés / Validálás</button>
+          <span id="status" class="notice"></span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Táblázat</h2>
+      <div class="card">
+        <div class="toolbar-row">
+          <label>Név mező KML-hez: 
+            <select id="nameKey" class="btn"></select>
+          </label>
+          <button id="selectAllBtn" class="btn">Mind kijelöl</button>
+          <button id="copyCsvBtn" class="btn" disabled>CSV vágólapra</button>
+          <button id="downloadCsvBtn" class="btn" disabled>CSV letöltés</button>
+          <button id="downloadKmlBtn" class="btn" disabled>KML letöltés</button>
+        </div>
+        <div style="overflow:auto; max-height:55vh">
+          <table id="featTable">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <div class="links">Készítette: <a href="https://github.com/gunicsba" target="_blank" rel="noopener">gunicsba</a> • <a href="/">Vissza a főoldalra</a></div>
+    </footer>
+  </div>
+
+  <script>
+    // --- elemek
+    const fileInput = document.getElementById('fileInput');
+    const pasteBtn = document.getElementById('pasteBtn');
+    const jsonInput = document.getElementById('jsonInput');
+    const loadBtn = document.getElementById('loadBtn');
+    const statusEl = document.getElementById('status');
+    const nameKeySel = document.getElementById('nameKey');
+
+    const table = document.getElementById('featTable');
+    const thead = table.querySelector('thead');
+    const tbody = table.querySelector('tbody');
+
+    const selectAllBtn = document.getElementById('selectAllBtn');
+    const copyCsvBtn = document.getElementById('copyCsvBtn');
+    const downloadCsvBtn = document.getElementById('downloadCsvBtn');
+    const downloadKmlBtn = document.getElementById('downloadKmlBtn');
+
+    // --- állapot
+    let g = { features: [], allKeys: [], displayedKeys: [], nameKey: 'name' };
+
+    // --- segédek
+    function setStatus(msg, ok=true){
+      statusEl.textContent = msg;
+      jsonInput.style.border = ok ? '2px solid green' : '2px solid red';
+    }
+    function safe(v){ return v==null ? '' : String(v); }
+
+    function parseGeoJSON(text){
+      const j = JSON.parse(text);
+      let feats = [];
+      if(j.type === 'FeatureCollection' && Array.isArray(j.features)) feats = j.features;
+      else if(j.type === 'Feature') feats = [j];
+      else if(j.type && j.coordinates) feats = [{ type:'Feature', properties:{}, geometry:j }];
+      else throw new Error('Nem felismerhető GeoJSON (FeatureCollection/Feature/Geometry).');
+      return feats;
+    }
+
+    function geometryCoordCount(geom){
+      function countCoords(coords){
+        if(!Array.isArray(coords)) return 0;
+        if(typeof coords[0] === 'number') return 1; // [lon,lat]
+        return coords.reduce((sum,c)=> sum + countCoords(c), 0);
+      }
+      return countCoords(geom.coordinates || []);
+    }
+
+    function buildKeys(features){
+      const set = new Set();
+      for(const f of features){
+        const p = f.properties || {};
+        Object.keys(p).forEach(k=> set.add(k));
+      }
+      // Prioritás: name, Name, id, ID az elejére
+      const keys = Array.from(set);
+      keys.sort((a,b)=>{
+        const pri = (k)=> ({name:0, Name:1, id:2, ID:3}[k] ?? 99);
+        return pri(a) - pri(b) || a.localeCompare(b);
+      });
+      return keys;
+    }
+
+    function renderNameKeyOptions(){
+      nameKeySel.innerHTML = '';
+      const keys = g.allKeys.length ? g.allKeys : ['name'];
+      for(const k of keys){
+        const opt = document.createElement('option');
+        opt.value = k; opt.textContent = k; if(k===g.nameKey) opt.selected = true;
+        nameKeySel.appendChild(opt);
+      }
+    }
+
+    function renderTable(){
+      // Oszlopok: ✓, #, Típus, Pontok, majd limitált property-k
+      const MAX_PROPS = 6;
+      g.displayedKeys = g.allKeys.slice(0, MAX_PROPS);
+
+      thead.innerHTML = '';
+      const trh = document.createElement('tr');
+      ['✓','#','Típus','Pontok', ...g.displayedKeys].forEach(h=>{
+        const th = document.createElement('th'); th.textContent = h; trh.appendChild(th);
+      });
+      thead.appendChild(trh);
+
+      tbody.innerHTML = '';
+      g.features.forEach((f, i)=>{
+        const tr = document.createElement('tr');
+
+        const tdChk = document.createElement('td');
+        const chk = document.createElement('input'); chk.type = 'checkbox'; chk.checked = true; chk.className = 'rowchk';
+        tdChk.appendChild(chk); tr.appendChild(tdChk);
+
+        const row = [String(i+1), safe(f.geometry?.type||''), String(geometryCoordCount(f.geometry||{}))];
+        const td1 = document.createElement('td'); td1.textContent = row[0]; td1.className='num'; tr.appendChild(td1);
+        const td2 = document.createElement('td'); td2.textContent = row[1]; tr.appendChild(td2);
+        const td3 = document.createElement('td'); td3.textContent = row[2]; td3.className='num'; tr.appendChild(td3);
+
+        for(const k of g.displayedKeys){
+          const td = document.createElement('td'); td.textContent = safe(f.properties?.[k]); tr.appendChild(td);
+        }
+        tbody.appendChild(tr);
+      });
+
+      const has = g.features.length>0;
+      copyCsvBtn.disabled = !has; downloadCsvBtn.disabled = !has; downloadKmlBtn.disabled = !has; 
+    }
+
+    function handleLoad(){
+      try{
+        const feats = parseGeoJSON(jsonInput.value);
+        g.features = feats;
+        g.allKeys = buildKeys(feats);
+        if(g.allKeys.includes('name')) g.nameKey = 'name';
+        else if(g.allKeys.includes('Name')) g.nameKey = 'Name';
+        else g.nameKey = g.allKeys[0] || 'name';
+        renderNameKeyOptions();
+        renderTable();
+        setStatus(`Betöltve: ${feats.length} feature.`, true);
+      }catch(err){
+        setStatus('Hiba: '+ err.message, false);
+      }
+    }
+
+    function blobDownload(str, mime, filename){
+      const blob = new Blob([str], {type: mime});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+      setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 0);
+    }
+
+    function tableToCSV(){
+      const rows = [];
+      const headers = ['selected','#','type','points', ...g.displayedKeys];
+      rows.push(headers.join(','));
+      const chks = tbody.querySelectorAll('tr');
+      g.features.forEach((f,i)=>{
+        const tr = chks[i]; const sel = tr.querySelector('.rowchk')?.checked ? '1':'0';
+        const parts = [sel, i+1, safe(f.geometry?.type), geometryCoordCount(f.geometry||{}), ...g.displayedKeys.map(k=>{
+          const v = safe(f.properties?.[k]);
+          // escape CSV
+          return '"'+ v.replace(/"/g,'""') +'"';
+        })];
+        rows.push(parts.join(','));
+      });
+      return rows.join('\n');
+    }
+
+    function coordsToKml(coords){
+      // coords: [lon,lat,(alt)]
+      const lon = Number(coords[0]);
+      const lat = Number(coords[1]);
+      const alt = coords.length>2 ? Number(coords[2]) : 0;
+      return `${lon},${lat},${alt}`;
+    }
+
+    function ringToKml(ring){
+      return ring.map(pt=> coordsToKml(pt)).join(' ');
+    }
+
+    function polygonToKml(coords){
+      // coords: [outerRing, hole1, hole2, ...]
+      const outer = ringToKml(coords[0]||[]);
+      const holes = (coords.slice(1)||[]).map(h=> `\n        <innerBoundaryIs><LinearRing><coordinates>${ringToKml(h)}</coordinates></LinearRing></innerBoundaryIs>`).join('');
+      return `<Polygon>\n        <outerBoundaryIs><LinearRing><coordinates>${outer}</coordinates></LinearRing></outerBoundaryIs>${holes}\n      </Polygon>`;
+    }
+
+    function lineToKml(coords){
+      return `<LineString><coordinates>${coords.map(p=> coordsToKml(p)).join(' ')}</coordinates></LineString>`;
+    }
+
+    function pointsToKml(coords){
+      return coords.map(p=> `<Point><coordinates>${coordsToKml(p)}</coordinates></Point>`).join('');
+    }
+
+    function geometryToKml(geom){
+      if(!geom) return '';
+      const t = geom.type;
+      const c = geom.coordinates;
+      switch(t){
+        case 'Point': return `<Point><coordinates>${coordsToKml(c)}</coordinates></Point>`;
+        case 'MultiPoint': return `<MultiGeometry>${pointsToKml(c)}</MultiGeometry>`;
+        case 'LineString': return lineToKml(c);
+        case 'MultiLineString': return `<MultiGeometry>${c.map(lineToKml).join('')}</MultiGeometry>`;
+        case 'Polygon': return polygonToKml(c);
+        case 'MultiPolygon': return `<MultiGeometry>${c.map(polygonToKml).join('')}</MultiGeometry>`;
+        default: return '';
+      }
+    }
+
+    function propsToDesc(props){
+      const entries = Object.entries(props||{}).map(([k,v])=> `${k}: ${v}`);
+      return entries.length ? entries.join('\n') : '';
+    }
+
+    function buildKML(){
+      const rows = tbody.querySelectorAll('tr');
+      const parts = [];
+      g.features.forEach((f,i)=>{
+        const tr = rows[i]; if(!tr) return;
+        if(!tr.querySelector('.rowchk')?.checked) return; // csak kijelölt
+        const name = safe(f.properties?.[g.nameKey] ?? `${f.geometry?.type||'Feature'} ${i+1}`);
+        const desc = propsToDesc(f.properties);
+        const geomKml = geometryToKml(f.geometry);
+        if(!geomKml) return;
+        parts.push(`<Placemark>\n  <name>${name}</name>\n  <description><![CDATA[${desc.replace(/]]>/g,'] ]>')}]]></description>\n  ${geomKml}\n</Placemark>`);
+      });
+
+      const kml = `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n  <Document>\n    <name>GeoJSON export</name>\n    ${parts.join('\n    ')}\n  </Document>\n</kml>`;
+      return kml;
+    }
+
+    // --- események
+    fileInput.addEventListener('change', (e)=>{
+      const file = e.target.files[0]; if(!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev)=>{ jsonInput.value = ev.target.result; };
+      reader.readAsText(file);
+    });
+
+    pasteBtn.addEventListener('click', async ()=>{
+      try{ jsonInput.value = await navigator.clipboard.readText(); }
+      catch(err){ setStatus('Vágólap beillesztés nem engedélyezett a böngészőben.', false); }
+    });
+
+    loadBtn.addEventListener('click', handleLoad);
+
+    selectAllBtn.addEventListener('click', ()=>{
+      const all = tbody.querySelectorAll('.rowchk');
+      const should = Array.from(all).some(c=> !c.checked); // ha van nem kijelölt, akkor mindet be
+      all.forEach(c=> c.checked = should);
+    });
+
+    copyCsvBtn.addEventListener('click', async ()=>{
+      const csv = tableToCSV();
+      try{ await navigator.clipboard.writeText(csv); setStatus('CSV a vágólapon.', true); }
+      catch{ setStatus('Nem sikerült a vágólapra másolni.', false); }
+    });
+
+    downloadCsvBtn.addEventListener('click', ()=>{
+      const csv = tableToCSV();
+      blobDownload(csv, 'text/csv;charset=utf-8', 'geojson_table.csv');
+    });
+
+    downloadKmlBtn.addEventListener('click', ()=>{
+      const kml = buildKML();
+      blobDownload(kml, 'application/vnd.google-earth.kml+xml', 'export.kml');
+    });
+
+    nameKeySel.addEventListener('change', ()=>{ g.nameKey = nameKeySel.value; });
+  </script>
+</body>
+</html>
