@@ -8,6 +8,8 @@
 <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
 <!-- <script src="https://api.mapbox.com/mapbox.js/plugins/turf/v3.0.11/turf.min.js"></script> -->
 <script src='libs/turf.min.js'></script>
+<script src="https://unpkg.com/@mapbox/shp-write@latest/shpwrite.js"></script>
+<script src="https://unpkg.com/jszip/dist/jszip.min.js"></script>
 <style type="text/css">
 	body {
   margin: 0;
@@ -116,7 +118,8 @@ function szamol(){
 			htmltext += koordinatapar +"\n";	
 		}
 		htmltext += "</textarea></td>";
-		htmltext += '<td><input type = "button" onclick = "szamolfold('+i+')" value = "Szamolj>>"></td>'
+		htmltext += '<td><input type = "button" onclick = "downloadAsEOVSHP('+i+',false)" value = "Shape">';
+		htmltext += '<input type = "button" onclick = "szamolfold('+i+')" value = "Szamolj>>"></td>'
 		htmltext += "<td><textarea id='WGS84OUT"+i+"' cols='30'></textarea></td>";
 		htmltext += '<td><input type = "button" onclick = "downloadAsKML('+i+')" value = "KML">';
 		htmltext += '<input type = "button" onclick = "displayField('+i+')" value = "Megjelenit"><input type = "button" onclick = "egyesit('+i+')" value = "Kombinalt"></td>';
@@ -423,6 +426,201 @@ element.click();
 document.body.removeChild(element);
 }
 
+async function downloadAsEOVSHP(j, addInner) {
+  var lines = document.getElementById('eov_'+j).value.split("\n");
+  const geojson = {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": []
+          },
+          "properties": {
+            "name": "TODO teszt"
+          }
+        }
+      ]
+    };
+  geojson.features[0].properties.name='name_'+j;
+//Outer Boundary first
+  var jsonArray = [];
+  for(var i = 0; i <= lines.length;i++){
+    if( lines[i] == undefined || lines[i].length < 10) continue;
+    if(i != lines.length){
+      var splitby  = ',';
+      var wgs = lines[i].split(splitby);
+      var obj = [];
+      obj.push(Number(wgs[0]));
+      obj.push(Number(wgs[1]));
+      jsonArray.push(obj);
+//      document.getElementById('WGS84OUT'+j).value+= i+' \n';
+    } else {
+//      document.getElementById('WGS84OUT'+j).value+=(i+1)+' \n';
+    }
+  }
+  var fileName =document.getElementById('telepules'+j).innerHTML;
+  fileName += "_";
+  fileName += document.getElementById('foldnev'+j).innerHTML;
+
+  jsonArray.push(jsonArray[0]);
+  geojson.features[0].geometry.coordinates.push(jsonArray);
+
+
+  if(addInner){ //Inner Boundaries
+    var innerboundary = document.getElementById('EOVINNER_'+j).value.split(";");
+    for(var k = 0; k < innerboundary.length; k++) {
+      jsonArray = [];
+      if( innerboundary[k] == undefined || innerboundary[k].length < 10) continue;
+      var lines = innerboundary[k].split("\n");
+      for(var i = 0; i <= lines.length;i++){
+        if( lines[i] == undefined || lines[i].length < 10) continue;
+        if(i != lines.length){
+          var splitby  = ',';
+          var wgs = lines[i].split(splitby);
+          var obj = [];
+          obj.push(Number(wgs[1]));
+          obj.push(Number(wgs[0]));
+          jsonArray.push(obj);
+    //      document.getElementById('WGS84OUT'+j).value+= i+' \n';
+        } else {
+    //      document.getElementById('WGS84OUT'+j).value+=(i+1)+' \n';
+        }
+      }
+      jsonArray.push(jsonArray[0]);
+      geojson.features[0].geometry.coordinates.push(jsonArray);
+    }
+  }
+
+  console.log(JSON.stringify(geojson));
+  var customPrj = 'PROJCS["HD72_EOV",GEOGCS["GCS_HD72",DATUM["D_Hungarian_1972",SPHEROID["GRS_1967",6378160,298.247167427]],PRIMEM["Greenwich",0],UNIT["Degree",0.017453292519943295]],PROJECTION["Hotine_Oblique_Mercator_Azimuth_Center"],PARAMETER["latitude_of_center",47.14439372222222],PARAMETER["longitude_of_center",19.04857177777778],PARAMETER["azimuth",90],PARAMETER["scale_factor",0.99993],PARAMETER["false_easting",650000],PARAMETER["false_northing",200000],UNIT["Meter",1]]' ;
+  // Create a Blob for the custom .prj file
+  const prjBlob = new Blob([customPrj], { type: 'text/plain' });
+  
+  const options = {
+    folder: 'eov_'+fileName,
+    prj: customPrj
+  }
+  // Function to download the shapefile as a ZIP
+  // Convert GeoJSON to Shapefile (ZIP format)
+  const shapefileBase64 = await shpwrite.zip(geojson, options);
+  // Decode the Base64 content to binary
+  const shapefileBinary = base64ToArrayBuffer(shapefileBase64);
+  
+  const blob = new Blob([shapefileBinary], { type: 'application/zip' });
+
+  const zip = new JSZip();
+  zip.loadAsync(blob).then(zipContent => {
+    zipContent.file('eov_'+fileName+"/POLYGON.prj",prjBlob);
+
+    // Generate the final ZIP
+    zipContent.generateAsync({ type: 'blob' }).then(finalZipBlob => {
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(finalZipBlob);
+      link.download = 'eov_'+(addInner?'_belsokkel_':'')+fileName+'.zip';
+      link.click();
+      URL.revokeObjectURL(link.href);
+    });
+
+  });
+
+}
+
+async function downloadAsWGS84SHP(j, addInner) {
+  var lines = document.getElementById('WGS84_'+j).value.split("\n");
+  const geojson = {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": []
+          },
+          "properties": {
+            "name": "TODO teszt"
+          }
+        }
+      ]
+    };
+  geojson.features[0].properties.name='name_'+j;
+  var jsonArray = [];
+  for(var i = 0; i <= lines.length;i++){
+    if( lines[i] == undefined || lines[i].length < 10) continue;
+    if(i != lines.length){
+      var splitby  = ',';
+      var wgs = lines[i].split(splitby);
+      var obj = [];
+      obj.push(Number(wgs[0]));
+      obj.push(Number(wgs[1]));
+      jsonArray.push(obj);
+//      document.getElementById('WGS84OUT'+j).value+= i+' \n';
+    } else {
+//      document.getElementById('WGS84OUT'+j).value+=(i+1)+' \n';
+    }
+  }
+    jsonArray.push(jsonArray[0]);
+    geojson.features[0].geometry.coordinates.push(jsonArray);
+
+
+  if(addInner){ //Inner Boundaries
+    var innerboundary = document.getElementById('WGS84INNER_'+j).value.split(";");
+    for(var k = 0; k < innerboundary.length; k++) {
+      jsonArray = [];
+      if( innerboundary[k] == undefined || innerboundary[k].length < 10) continue;
+      var lines = innerboundary[k].split("\n");
+      for(var i = 0; i <= lines.length;i++){
+        if( lines[i] == undefined || lines[i].length < 10) continue;
+        if(i != lines.length){
+          var splitby  = ',';
+          var wgs = lines[i].split(splitby);
+          var obj = [];
+          obj.push(Number(wgs[0]));
+          obj.push(Number(wgs[1]));
+          jsonArray.push(obj);
+    //      document.getElementById('WGS84OUT'+j).value+= i+' \n';
+        } else {
+    //      document.getElementById('WGS84OUT'+j).value+=(i+1)+' \n';
+        }
+      }
+      jsonArray.push(jsonArray[0]);
+      geojson.features[0].geometry.coordinates.push(jsonArray);
+    } 
+  }
+
+  const fileName =document.getElementById('name_'+j).innerHTML;
+  
+  console.log(JSON.stringify(geojson));
+  // Function to download the shapefile as a ZIP
+  // Convert GeoJSON to Shapefile (ZIP format)
+  const shapefileBase64 = await shpwrite.zip(geojson, {folder: 'wgs84_'+fileName});
+  // Decode the Base64 content to binary
+  const shapefileBinary = base64ToArrayBuffer(shapefileBase64);
+  // Create a download link and trigger the download
+  const blob = new Blob([shapefileBinary], { type: 'application/zip' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  console.log(document.getElementById('name_'+j));
+  console.log(fileName);
+  link.download = 'wgs84_'+ (addInner?'_belsokkel_':'')+fileName+'.zip'; // Name of the resulting ZIP file
+  link.click();
+
+  // Clean up the object URL
+  URL.revokeObjectURL(link.href);
+
+}
+
+// Utility to decode Base64 to binary (Uint8Array)
+function base64ToArrayBuffer(base64) {
+  const binaryString = atob(base64); // Decode Base64 string
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
 
 
 </script>
