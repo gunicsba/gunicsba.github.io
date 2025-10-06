@@ -73,6 +73,58 @@
   <pre id="output"></pre>
 
   <script>
+  (function (global) {
+    const SRC = "https://raw.githubusercontent.com/ferenci-tamas/IrszHnk/refs/heads/master/IrszHnk.json";
+    let _map = null;
+    let _ready = null;
+  
+    async function load(url = SRC) {
+      if (_ready) return _ready;
+      _ready = (async () => {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
+        const data = await res.json();
+        _map = new Map();
+        for (const row of data) {
+          const ksh = String(row["Helység.KSH.kódja"]).trim();
+          if (ksh) _map.set(ksh,row);
+        }
+        return true;
+      })();
+      console.log("KSH lookup betöltve");
+      return _ready;
+    }
+  
+    function get(ksh) {
+      if (!_map) throw new Error("KSH lookup még nincs betöltve. Hívd meg a load()-ot!");
+      return _map.get(String(ksh)) ?? null;
+    }
+  
+    function has(ksh) { return _map?.has(String(ksh)) ?? false; }
+    function tryGet(ksh) { return _map ? (_map.get(String(ksh)) ?? null) : null; }
+    // kényelmi: normalizált, szépített kimenet
+function getPretty(ksh) {
+  const r = tryGet(ksh);
+  if (!r) return null;
+  return {
+    ksh: String(r["Helység.KSH.kódja"]).trim(),
+    telepules: r["Helység.megnevezése"],
+    jogallas: r["Helység.jogállása"],
+    irsz: r["IRSZ"],
+    megye: r["Vármegye.megnevezése"],
+    jarasKod: r["Járás.kódja"],
+    jarasNev: r["Járás.neve"],
+    jarasSzekhely: r["Járás.székhelye"]
+  };
+}
+
+  
+    global.KSHLookup = { load, get, tryGet, has, getPretty };
+  })(window);
+  </script>
+
+  <script>
+    KSHLookup.load();
     document.getElementById('processBtn').addEventListener('click', async () => {
       const fileInput = document.getElementById('shapefileInput');
       const file = fileInput.files[0];
@@ -141,8 +193,13 @@
           } else if(shapefileData.name[k] == "minosegi_osztaly") {
              htmltext += "<td id='telepules"+i+"'>minosegi osztaly:" + feature.properties.min_oszt  
              htmltext += " muvel_ag_k:"+ feature.properties.muvel_ag_k + "</td>";
+          } else if(feature.properties.ksh_kod != undefined) {
+             const r = KSHLookup.getPretty(feature.properties.ksh_kod);
+             if (r) console.log(r);
+             //+r.megye+" - "
+             htmltext += "<td id='telepules"+i+"'>"+r.telepules+"<td>";
           } else {
-            htmltext += "<td id='telepules"+i+"'>" +shapefileData.name[k] +"</td>";
+             htmltext += "<td id='telepules"+i+"'>" +shapefileData.name[k] +"</td>";
           }
 
           if(feature.properties.hrsz != undefined) {

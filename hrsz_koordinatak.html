@@ -153,80 +153,6 @@ Y: ${toFixed(y)}`;
       };
     }
 
-    function geojsonToKml(gj){
-      const header = `<?xml version="1.0" encoding="UTF-8"?>
-<kml xmlns="http://www.opengis.net/kml/2.2">
-<Document>`;
-      const footer = `</Document>
-</kml>`;
-      const placemarks = (gj.features||[]).map((f,i)=>{
-        const name = escXml((f.properties&& (f.properties.name || f.properties.HRSZ || f.id)) || `feature_${i+1}`);
-        const extData = f.properties ? Object.entries(f.properties).map(([k,v])=>`<Data name="${escXml(k)}"><value>${escXml(v)}</value></Data>`).join('') : '';
-        const ext = extData? `<ExtendedData>${extData}</ExtendedData>`:'';
-        const g = f.geometry;
-        if(!g) return '';
-        function coordsStr(line){ return line.map(([lon,lat])=>`${lon},${lat},0`).join(' '); }
-        function polygonKml(coords){
-          const outer = coords[0]||[]; const inners = coords.slice(1);
-          return `<Polygon><outerBoundaryIs><LinearRing><coordinates>${coordsStr(outer)}</coordinates></LinearRing></outerBoundaryIs>${inners.map(inner=>`<innerBoundaryIs><LinearRing><coordinates>${coordsStr(inner)}</coordinates></LinearRing></innerBoundaryIs>`).join('')}</Polygon>`;
-        }
-        let geomKml='';
-        switch(g.type){
-          case 'Point': geomKml = `<Point><coordinates>${coordsStr([g.coordinates])}</coordinates></Point>`; break;
-          case 'MultiPoint': geomKml = g.coordinates.map(pt=>`<Placemark><name>${name}</name>${ext}<Point><coordinates>${coordsStr([pt])}</coordinates></Point></Placemark>`).join(''); return geomKml;
-          case 'LineString': geomKml = `<LineString><coordinates>${coordsStr(g.coordinates)}</coordinates></LineString>`; break;
-          case 'MultiLineString': geomKml = g.coordinates.map(line=>`<Placemark><name>${name}</name>${ext}<LineString><coordinates>${coordsStr(line)}</coordinates></LineString></Placemark>`).join(''); return geomKml;
-          case 'Polygon': geomKml = polygonKml(g.coordinates); break;
-          case 'MultiPolygon': geomKml = g.coordinates.map(poly=>`<Placemark><name>${name}</name>${ext}${polygonKml(poly)}</Placemark>`).join(''); return geomKml;
-          default: return '';
-        }
-        return `<Placemark><name>${name}</name>${ext}${geomKml}</Placemark>`;
-      }).join('');
-      return header + placemarks + footer;
-    }
-
-    function downloadBlob(filename, mime, data){
-      const blob = new Blob([data], {type:mime});
-      const a = Object.assign(document.createElement('a'), {href: URL.createObjectURL(blob), download: filename});
-      a.click();
-      setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
-    }
-
-    // ======= CORS test: try to fetch shape-zip, convert → KML =======
-    async function fetchZipAndMakeKML(){
-      try{
-        setStatus('Letöltés indítása…', null);
-        const url = qs('wfsUrlLink').href;
-        const res = await fetch(url, {mode:'no-cors'});
-        if(!res.ok) throw new Error(`HTTP ${res.status}`);
-        const ct = res.headers.get('content-type')||'';
-        if(!/zip|octet-stream/i.test(ct)){
-          // Egyes geoserverek nem adnak jó content-type-ot; ettől még lehet ZIP
-        }
-        const buf = await res.arrayBuffer();
-        setStatus('ZIP beolvasása a böngészőben…', null);
-        const gj23700 = await shp(buf);
-        const gj4326 = transformTo4326(gj23700);
-        setStatus('KML generálás…', null);
-        const kml = geojsonToKml(gj4326);
-        downloadBlob('adat.kml','application/vnd.google-earth.kml+xml', kml);
-        setStatus('Siker: KML letöltve (WFS→SHP→KML).', true);
-      }catch(err){
-        console.error(err);
-        setStatus('Hiba: valószínűleg CORS tiltás miatt nem olvasható a ZIP. Használd a helyi ZIP→KML konvertálást alább.', false);
-      }
-    }
-
-    // ======= Local ZIP → KML (fallback, CORS nélkül) =======
-    async function localZipToKML(file){
-      const buf = await file.arrayBuffer();
-      const gj23700 = await shp(buf);
-      const gj4326 = transformTo4326(gj23700);
-      const kml = geojsonToKml(gj4326);
-      downloadBlob(file.name.replace(/\.zip$/i,'') + '.kml','application/vnd.google-earth.kml+xml', kml);
-      setStatus('Helyi ZIP → KML sikeres.', true);
-    }
-
     // ======= URL paraméterek betöltése indításkor =======
     window.addEventListener('DOMContentLoaded', ()=>{
       const sp = new URLSearchParams(location.search);
@@ -310,47 +236,13 @@ Y: ${toFixed(y)}`;
       <div class="row mt8">
         <a id="wfsUrlLink" href="#" target="_blank" rel="noopener">Megnyitás</a>
         <button class="btn copy" data-copy onclick="copyText('wfsUrlText')">Link másolása</button>
-        <button class="btn secondary" onclick="fetchZipAndMakeKML()">Letöltés & KML (CORS teszt)</button>
       </div>
-      <div class="mt8">
-        <div id="corsStatus" class="out">CORS teszt még nem futott.</div>
-      </div>
-    </div>
-
     <div class="card mt16">
-      <div class="grid">
-        <div class="col7">
-          <label>WMS alap URL (előnézethez)</label>
-          <input id="baseWMS" value="https://www.oeny.hu/hk-geoserver/hrsz/wms" />
-        </div>
-        <div class="col5">
-          <label>Réteg (LAYERS)</label>
-          <input id="layers" value="hrsz:foldreszlet" oninput="qs('typeName').value=this.value; build();" />
-        </div>
-      </div>
-      <div class="row mt12">
-        <a id="wmsPng" href="#" target="_blank" rel="noopener" class="btn ghost">WMS PNG előnézet</a>
-        <a id="wmsSvg" href="#" target="_blank" rel="noopener" class="btn ghost">WMS SVG előnézet</a>
-      </div>
+      <h3><a href="./shape_kml.html">Letölött ZIP (EOV) → WGS84 KML</a></h3>
     </div>
 
-    <div class="card mt16">
-      <h3>Paraméterezett megnyitás (URL-be értékek)</h3>
-      <p class="tiny">Az oldal indítható előre kitöltött paraméterekkel: <code>?lat=..&lon=..&w=..&h=..&layer=..&baseWFS=..&baseWMS=..&auto=1</code>. Az alábbi link mindig a jelenlegi beállításokkal készül.</p>
-      <div class="out" id="paramLink"></div>
-      <div class="row mt8">
-        <a id="paramLinkA" href="#" target="_blank" rel="noopener">Megnyitás ezekkel a paraméterekkel</a>
-        <button class="btn copy" data-copy onclick="copyText('paramLink')">Link másolása</button>
-      </div>
     </div>
 
-    <div class="card mt16">
-      <h3>Helyi ZIP → KML (CORS nélkül működik)</h3>
-      <p class="tiny">Ha a fenti gomb CORS miatt hibázik: töltsd le a shape-zipet (a linkre kattintva), majd dobd be ide a ZIP-et – a böngészőben GeoJSON-ná és KML-lé alakítjuk (WGS84).</p>
-      <input id="zipInput" type="file" accept=".zip" />
-    </div>
-
-    <p class="tiny mt24">Megjegyzés: Az EOV definíció itt 3 paraméteres +towgs84 közelítést használ (~méteres pontosság). Centiméteres pontossághoz NTv2 rács szükséges (böngészőben jellemzően nem érhető el).</p>
   </div>
 </body>
 </html>
