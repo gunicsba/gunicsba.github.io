@@ -1,3 +1,10 @@
+F9P:
+https://github.com/lansalot/AOGConfigOMatic/releases
+
+Rename the downloaded files as Single.txt and it should be simple to flash.
+
+
+
 How to easily modify RS232 on the UM982:
 
 list COM ports
