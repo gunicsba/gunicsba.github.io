@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>LineString -> Polygon KML összefűző</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin:20px; color:#222; }
+    .container { max-width:900px; margin:auto; }
+    h1 { text-align:center; color:#333; }
+    input, button, textarea { width:100%; padding:8px; margin:6px 0; box-sizing:border-box; border-radius:6px; border:1px solid #ccc;}
+    button { background:#5499c7; color:#fff; border:0; cursor:pointer; }
+    button:hover { background:#3b7fb0; }
+    .row { display:flex; gap:10px; }
+    .col { flex:1; }
+    pre { background:#f7f7f7; padding:10px; border-radius:6px; overflow:auto; max-height:300px;}
+    label { font-weight:600; display:block; margin-top:6px; }
+    .info { color:#555; font-size:0.95em; }
+    .link { margin-top:8px; display:inline-block; padding:8px 12px; background:#2ecc71; color:#fff; text-decoration:none; border-radius:6px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>LineString → Polygon (KML)</h1>
+    <p class="info">Tölts fel egy vagy több <code>.kml</code> fájlt. Az oldal kikeresi a <code>LineString</code>-eket, megpróbálja sorba rendezni az összevágott vonalakat és zárt polygon(oka)t készít belőlük. A kimenet KML, egy vagy több Placemark-pal.</p>
+
+    <label for="kmlInput">KML fájl(ok) feltöltése</label>
+    <input id="kmlInput" type="file" accept=".kml" multiple />
+
+    <label for="nameInput">Placemark név (alapértelmezett: Polygon)</label>
+    <input id="nameInput" type="text" placeholder="02/1" value="Polygon" />
+
+    <label for="colorInput">Poly color (KML aabbggrr hex rész nélkül '#') — pl. 801d0408</label>
+    <input id="colorInput" type="text" placeholder="801d0408" value="801d0408" />
+
+    <button id="processBtn">Feldolgozás — készíts polygon-t</button>
+
+    <div id="status" style="margin-top:10px;"></div>
+
+    <h3>Eredmény (letölthető KML és KML forrás)</h3>
+    <div id="downloadArea"></div>
+    <pre id="kmlOut" style="display:none;"></pre>
+  </div>
+
+<script>
+/*
+  Algorithm:
+  - Parse all LineString coordinates from uploaded KML files.
+  - Build list of segments (each segment is array of [ [lon,lat], ... ])
+  - Use a point-key map (rounded coords) to link segment endpoints.
+  - Iteratively assemble rings: pick a segment, extend forward/backward by finding connecting segments,
+    flipping when necessary. When start==end -> closed ring -> output polygon coordinates.
+  - Output KML with one Placemark per ring.
+*/
+
+function coordKey(pt) {
+  // round to 6 decimals to avoid float mismatches; adjust if needed
+  return pt[0].toFixed(6) + ',' + pt[1].toFixed(6);
+}
+
+function parseCoordinatesText(text){
+  // accepts "lon,lat,alt lon,lat,alt ..." or "lon,lat lon,lat"
+  const toks = text.trim().split(/\s+/);
+  const pts = [];
+  for(const t of toks){
+    if(!t) continue;
+    const parts = t.split(',');
+    if(parts.length < 2) continue;
+    const lon = parseFloat(parts[0]);
+    const lat = parseFloat(parts[1]);
+    if(isFinite(lon) && isFinite(lat)) pts.push([lon,lat]);
+  }
+  return pts;
+}
+
+function extractLineStringsFromKML(xmlString){
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlString, "application/xml");
+  // handle both default kml namespace and no-namespace
+  const lineStrings = Array.from(doc.getElementsByTagNameNS('*','LineString'));
+  const coords = [];
+  for(const ls of lineStrings){
+    const cnode = ls.getElementsByTagName('coordinates')[0] || ls.getElementsByTagNameNS('*','coordinates')[0];
+    if(cnode && cnode.textContent.trim().length > 0){
+      const pts = parseCoordinatesText(cnode.textContent);
+      if(pts.length > 1) coords.push(pts);
+    }
+  }
+  return coords;
+}
+
+function assembleRings(segments){
+  // segments: array of arrays of points [[lon,lat],...]
+  const segs = segments.map(s => s.slice()); // copy
+  // map from coordKey -> list of segment indices that have that endpoint
+  const endpointMap = new Map();
+  function addEndpoint(key, idx){
+    const arr = endpointMap.get(key) || [];
+    arr.push(idx);
+    endpointMap.set(key, arr);
+  }
+  function removeEndpointRef(key, idx){
+    const arr = endpointMap.get(key) || [];
+    const ni = arr.indexOf(idx);
+    if(ni >= 0) { arr.splice(ni,1); endpointMap.set(key, arr); }
+  }
+
+  for(let i=0;i<segs.length;i++){
+    const firstKey = coordKey(segs[i][0]);
+    const lastKey = coordKey(segs[i][segs[i].length-1]);
+    addEndpoint(firstKey, i);
+    addEndpoint(lastKey, i);
+  }
+
+  const used = new Array(segs.length).fill(false);
+  const rings = [];
+
+  for(let startIdx=0; startIdx<segs.length; startIdx++){
+    if(used[startIdx]) continue;
+    // start building a chain
+    used[startIdx] = true;
+    // remove endpoints refs for startIdx
+    removeEndpointRef(coordKey(segs[startIdx][0]), startIdx);
+    removeEndpointRef(coordKey(segs[startIdx][segs[startIdx].length-1]), startIdx);
+
+    let chain = segs[startIdx].slice(); // array of points
+    let extended = true;
+    // extend forward
+    while(extended){
+      extended = false;
+      const lastKey = coordKey(chain[chain.length-1]);
+      const candidates = endpointMap.get(lastKey) || [];
+      if(candidates.length > 0){
+        // pick the first candidate
+        const idx = candidates[0];
+        if(used[idx]){
+          // shouldn't happen but skip
+          removeEndpointRef(lastKey, idx);
+          continue;
+        }
+        used[idx] = true;
+        // determine orientation: if segs[idx] starts at lastKey -> append segs[idx][1:]
+        const s = segs[idx];
+        const sFirst = coordKey(s[0]);
+        const sLast = coordKey(s[s.length-1]);
+        if(sFirst === lastKey){
+          // append without duplicating the connecting point
+          chain = chain.concat(s.slice(1));
+        } else if(sLast === lastKey){
+          // reverse then append without duplicating
+          chain = chain.concat(s.slice(0, s.length-1).reverse());
+        } else {
+          // no orientation match (shouldn't happen) - skip
+        }
+        // remove this idx from endpoint map (both endpoints)
+        removeEndpointRef(coordKey(s[0]), idx);
+        removeEndpointRef(coordKey(s[s.length-1]), idx);
+        extended = true;
+        continue;
+      }
+      // try to extend backward
+      const firstKey = coordKey(chain[0]);
+      const backCandidates = endpointMap.get(firstKey) || [];
+      if(backCandidates.length > 0){
+        const idx = backCandidates[0];
+        if(used[idx]){
+          removeEndpointRef(firstKey, idx);
+          continue;
+        }
+        used[idx] = true;
+        const s = segs[idx];
+        const sFirst = coordKey(s[0]);
+        const sLast = coordKey(s[s.length-1]);
+        if(sLast === firstKey){
+          // prepend without duplicating
+          chain = s.slice(0, s.length-1).concat(chain);
+        } else if(sFirst === firstKey){
+          // reverse then prepend
+          chain = s.slice(1).reverse().concat(chain);
+        }
+        removeEndpointRef(coordKey(s[0]), idx);
+        removeEndpointRef(coordKey(s[s.length-1]), idx);
+        extended = true;
+      }
+    }
+
+    // try to close chain: if first equals last -> ring
+    if(coordKey(chain[0]) === coordKey(chain[chain.length-1])){
+      rings.push(chain);
+    } else {
+      // Not closed. Try to find any leftover segment that can connect end to start by search.
+      // brute-force: try to find a path connecting last->first via any unused segments chain (simple greedy)
+      // For simplicity: if not closed, still push as "open ring" (user can check).
+      rings.push(chain);
+    }
+  }
+
+  return rings;
+}
+
+function generateKMLFromRings(rings, name, color) {
+  const header = `<?xml version="1.0" encoding="utf-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n  <Document>\n`;
+  let body = '';
+  rings.forEach((ring,i) => {
+    // Ensure coordinates string in lon,lat,0 triplets and ring closed (duplicate first if needed)
+    let pts = ring.slice();
+    if(coordKey(pts[0]) !== coordKey(pts[pts.length-1])) {
+      pts.push(pts[0].slice());
+    }
+    const coordText = pts.map(p => `${p[0]},${p[1]},0`).join(' ');
+    const placemarkName = (rings.length>1) ? `${name} - ${i+1}` : name;
+    body += `    <Placemark>\n    <Style>\n     <PolyStyle><color>${color}</color><fill>1</fill><outline>1</outline></PolyStyle>\n    </Style>\n      <name>${placemarkName}</name>\n      <Polygon>\n         <tessellate>1</tessellate>\n         <outerBoundaryIs>\n            <LinearRing>\n               <coordinates>${coordText}</coordinates>\n            </LinearRing>\n         </outerBoundaryIs>\n      </Polygon>\n   </Placemark>\n\n`;
+  });
+  const footer = '  </Document>\n</kml>\n';
+  return header + body + footer;
+}
+
+document.getElementById('processBtn').addEventListener('click', async () => {
+  const files = document.getElementById('kmlInput').files;
+  const name = document.getElementById('nameInput').value || 'Polygon';
+  const color = (document.getElementById('colorInput').value || '801d0408').trim();
+
+  const status = document.getElementById('status');
+  const downloadArea = document.getElementById('downloadArea');
+  const out = document.getElementById('kmlOut');
+  downloadArea.innerHTML = '';
+  out.style.display = 'none';
+  out.textContent = '';
+  if(!files || files.length === 0) { status.textContent = 'Nincs feltöltve KML fájl.'; return; }
+
+  status.textContent = 'Feldolgozás...';
+
+  // collect all LineStrings from all files
+  let segments = [];
+  for(const f of files){
+    try {
+      const txt = await f.text();
+      const segs = extractLineStringsFromKML(txt);
+      for(const s of segs) segments.push(s);
+    } catch(err) {
+      console.error('File read error', err);
+    }
+  }
+
+  if(segments.length === 0) {
+    status.textContent = 'Nem találtam LineString-et a feltöltött fájlokban.';
+    return;
+  }
+
+  // If any segment is just a polyline, optionally split it into individual segment pieces?
+  // (We currently treat each LineString as a polygon edge chain.)
+  const rings = assembleRings(segments);
+
+  // feedback about rings
+  let msg = `Talált vonalszegmens(ek): ${segments.length}. Összeszerelt gyűrű(k): ${rings.length}.\n`;
+  // count closed rings
+  const closedCount = rings.filter(r => coordKey(r[0]) === coordKey(r[r.length-1])).length;
+  msg += `Zárt gyűrűk: ${closedCount}, nyitott láncok: ${rings.length - closedCount}.`;
+  status.textContent = msg;
+
+  // build KML
+  const kml = generateKMLFromRings(rings, name, color);
+
+  // show KML in <pre> (collapsed by default)
+  out.style.display = 'block';
+  out.textContent = kml;
+
+  // create download link
+  const blob = new Blob([kml], {type: 'application/vnd.google-earth.kml+xml;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = (name.replace(/\s+/g,'_') || 'polygon') + '.kml';
+  a.textContent = 'Letöltés: Kimeneti KML';
+  a.className = 'link';
+  downloadArea.appendChild(a);
+
+  // also provide a "Copy KML" button
+  const copyBtn = document.createElement('button');
+  copyBtn.textContent = 'KML másolása vágólapra';
+  copyBtn.style.marginLeft = '10px';
+  copyBtn.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(kml);
+      alert('KML a vágólapra másolva.');
+    } catch(e) { alert('Másolási hiba: ' + e); }
+  };
+  downloadArea.appendChild(copyBtn);
+
+});
+
+</script>
+</body>
+</html>
