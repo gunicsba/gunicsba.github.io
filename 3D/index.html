@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>3MF Viewer</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      display: flex;
+      height: 100vh;
+    }
+    #fileList {
+      width: 260px;
+      border-right: 1px solid #ccc;
+      overflow-y: auto;
+      padding: 10px;
+      box-sizing: border-box;
+    }
+    #viewerContainer {
+      flex: 1;
+      position: relative;
+      background: #222;
+    }
+    #viewer {
+      width: 100%;
+      height: 100%;
+    }
+    .file-entry {
+      cursor: pointer;
+      padding: 6px 8px;
+      border-radius: 4px;
+      margin-bottom: 4px;
+    }
+    .file-entry:hover {
+      background: #eee;
+    }
+    .file-entry.active {
+      background: #cde;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div id="fileList">
+    <h3>.3mf files</h3>
+    <div id="files"></div>
+  </div>
+  <div id="viewerContainer">
+    <canvas id="viewer"></canvas>
+  </div>
+
+  <script type="module">
+    // --- imports for three.js + controls + 3MF loader ---
+    import * as THREE from 'https://unpkg.com/three@0.161.0/build/three.module.js';
+    import { OrbitControls } from 'https://unpkg.com/three@0.161.0/examples/jsm/controls/OrbitControls.js';
+    import { ThreeMFLoader } from 'https://unpkg.com/three@0.161.0/examples/jsm/loaders/3MFLoader.js';
+
+    const owner = 'gunicsba';
+    const repo  = 'gunicsba.github.io';
+    const path  = '3D';
+
+    const fileListEl = document.getElementById('files');
+    const canvas = document.getElementById('viewer');
+
+    // --- basic three.js setup ---
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x222222);
+
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
+    camera.position.set(0, 80, 160);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
+    hemiLight.position.set(0, 200, 0);
+    scene.add(hemiLight);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(100, 100, 50);
+    scene.add(dirLight);
+
+    const grid = new THREE.GridHelper(200, 20);
+    scene.add(grid);
+
+    const loader = new ThreeMFLoader();
+
+    let currentObject = null;
+    let activeEntry = null;
+
+    function resizeRenderer() {
+      const container = document.getElementById('viewerContainer');
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+      renderer.setSize(width, height, false);
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+    }
+
+    window.addEventListener('resize', resizeRenderer);
+    resizeRenderer();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    function centerObject(object) {
+      // compute bounding box, center and fit in view
+      const box = new THREE.Box3().setFromObject(object);
+      const size = new THREE.Vector3();
+      const center = new THREE.Vector3();
+      box.getSize(size);
+      box.getCenter(center);
+
+      object.position.sub(center); // recenter
+
+      const maxDim = Math.max(size.x, size.y, size.z);
+      const fov = camera.fov * (Math.PI / 180);
+      const distance = (maxDim / 2) / Math.tan(fov / 2);
+
+      camera.position.set(0, distance, distance * 1.2);
+      camera.lookAt(0, 0, 0);
+      controls.target.set(0, 0, 0);
+      controls.update();
+    }
+
+    function loadModel(relativePath, liElement) {
+      const url = `/${relativePath}`; // e.g. /3D/foo.3mf on GitHub Pages
+
+      if (activeEntry) activeEntry.classList.remove('active');
+      if (liElement) {
+        activeEntry = liElement;
+        activeEntry.classList.add('active');
+      }
+
+      if (currentObject) {
+        scene.remove(currentObject);
+        currentObject.traverse(obj => {
+          if (obj.geometry) obj.geometry.dispose();
+          if (obj.material) {
+            if (Array.isArray(obj.material)) {
+              obj.material.forEach(m => m.dispose && m.dispose());
+            } else if (obj.material.dispose) {
+              obj.material.dispose();
+            }
+          }
+        });
+        currentObject = null;
+      }
+
+      loader.load(
+        url,
+        (object) => {
+          currentObject = object;
+          scene.add(object);
+          centerObject(object);
+        },
+        undefined,
+        (error) => {
+          console.error('Error loading 3MF model:', error);
+        }
+      );
+    }
+
+    // --- fetch list of files from GitHub API ---
+    async function loadFileList() {
+      const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+      const res = await fetch(apiUrl);
+      if (!res.ok) {
+        fileListEl.textContent = 'Failed to load file list.';
+        console.error('GitHub API error', res.status, await res.text());
+        return;
+      }
+      const data = await res.json();
+
+      const models = data.filter(item =>
+        item.type === 'file' && item.name.toLowerCase().endsWith('.3mf')
+      );
+
+      if (models.length === 0) {
+        fileListEl.textContent = 'No .3mf files found in /3D';
+        return;
+      }
+
+      models.forEach((file, index) => {
+        const div = document.createElement('div');
+        div.className = 'file-entry';
+        div.textContent = file.name;
+        div.addEventListener('click', () => {
+          loadModel(`${path}/${file.name}`, div);
+        });
+        fileListEl.appendChild(div);
+
+        // autoload first model
+        if (index === 0) {
+          loadModel(`${path}/${file.name}`, div);
+        }
+      });
+    }
+
+    loadFileList();
+  </script>
+</body>
+</html>
