@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>3MF Viewer</title>
+  <title>3D Model Viewer</title>
   <style>
     body {
       margin: 0;
@@ -10,13 +10,55 @@
       display: flex;
       height: 100vh;
     }
-    #fileList {
-      width: 260px;
+    #sidebar {
+      width: 320px;
       border-right: 1px solid #ccc;
       overflow-y: auto;
       padding: 10px;
       box-sizing: border-box;
+      background: #fafafa;
     }
+    #models {
+      margin-top: 6px;
+    }
+    .model-entry {
+      padding: 6px 8px;
+      margin-bottom: 6px;
+      border-radius: 4px;
+      border: 1px solid #ddd;
+      background: #fff;
+    }
+    .model-name {
+      font-weight: bold;
+      margin-bottom: 4px;
+      word-break: break-all;
+    }
+    .model-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    .model-actions button,
+    .model-actions a {
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      border: 1px solid #999;
+      background: #f3f3f3;
+      text-decoration: none;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .model-actions button:hover,
+    .model-actions a:hover {
+      background: #e0e0e0;
+    }
+    .model-actions button.active-preview {
+      background: #cde;
+      border-color: #69c;
+      font-weight: bold;
+    }
+
     #viewerContainer {
       flex: 1;
       position: relative;
@@ -25,51 +67,43 @@
     #viewer {
       width: 100%;
       height: 100%;
-    }
-    .file-entry {
-      cursor: pointer;
-      padding: 6px 8px;
-      border-radius: 4px;
-      margin-bottom: 4px;
-    }
-    .file-entry:hover {
-      background: #eee;
-    }
-    .file-entry.active {
-      background: #cde;
-      font-weight: bold;
+      display: block;
     }
   </style>
 </head>
 <body>
-  <div id="fileList">
-    <h3>.3mf files</h3>
-    <div id="files"></div>
+  <div id="sidebar">
+    <h3>3D Models</h3>
+    <p style="font-size: 12px; color: #555;">
+      Click a preview button to view the model. All formats are available as downloads.
+    </p>
+    <div id="models"></div>
   </div>
   <div id="viewerContainer">
     <canvas id="viewer"></canvas>
   </div>
 
   <script type="module">
-    // --- imports for three.js + controls + 3MF loader ---
     import * as THREE from 'https://unpkg.com/three@0.161.0/build/three.module.js';
     import { OrbitControls } from 'https://unpkg.com/three@0.161.0/examples/jsm/controls/OrbitControls.js';
     import { ThreeMFLoader } from 'https://unpkg.com/three@0.161.0/examples/jsm/loaders/3MFLoader.js';
+    import { STLLoader } from 'https://unpkg.com/three@0.161.0/examples/jsm/loaders/STLLoader.js';
 
     const owner = 'gunicsba';
     const repo  = 'gunicsba.github.io';
     const path  = '3D';
 
-    const fileListEl = document.getElementById('files');
+    const modelsContainer = document.getElementById('models');
     const canvas = document.getElementById('viewer');
 
-    // --- basic three.js setup ---
+    // --- three.js setup ---
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     renderer.setPixelRatio(window.devicePixelRatio);
+
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x222222);
 
-    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 2000);
     camera.position.set(0, 80, 160);
 
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -86,10 +120,11 @@
     const grid = new THREE.GridHelper(200, 20);
     scene.add(grid);
 
-    const loader = new ThreeMFLoader();
+    const threeMFLoader = new ThreeMFLoader();
+    const stlLoader = new STLLoader();
 
     let currentObject = null;
-    let activeEntry = null;
+    let activePreviewButton = null;
 
     function resizeRenderer() {
       const container = document.getElementById('viewerContainer');
@@ -110,98 +145,193 @@
     }
     animate();
 
+    function clearCurrentObject() {
+      if (!currentObject) return;
+      scene.remove(currentObject);
+      currentObject.traverse((obj) => {
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) {
+          if (Array.isArray(obj.material)) {
+            obj.material.forEach((m) => m.dispose && m.dispose());
+          } else if (obj.material.dispose) {
+            obj.material.dispose();
+          }
+        }
+      });
+      currentObject = null;
+    }
+
     function centerObject(object) {
-      // compute bounding box, center and fit in view
       const box = new THREE.Box3().setFromObject(object);
       const size = new THREE.Vector3();
       const center = new THREE.Vector3();
       box.getSize(size);
       box.getCenter(center);
 
-      object.position.sub(center); // recenter
+      object.position.sub(center);
 
       const maxDim = Math.max(size.x, size.y, size.z);
       const fov = camera.fov * (Math.PI / 180);
       const distance = (maxDim / 2) / Math.tan(fov / 2);
 
-      camera.position.set(0, distance, distance * 1.2);
+      camera.position.set(0, distance, distance * 1.3);
       camera.lookAt(0, 0, 0);
       controls.target.set(0, 0, 0);
       controls.update();
     }
 
-    function loadModel(relativePath, liElement) {
-      const url = `/${relativePath}`; // e.g. /3D/foo.3mf on GitHub Pages
+    function loadModel(relativePath, type, buttonEl) {
+      const url = `/${relativePath}`; // served by GitHub Pages
 
-      if (activeEntry) activeEntry.classList.remove('active');
-      if (liElement) {
-        activeEntry = liElement;
-        activeEntry.classList.add('active');
+      if (activePreviewButton) {
+        activePreviewButton.classList.remove('active-preview');
+      }
+      if (buttonEl) {
+        activePreviewButton = buttonEl;
+        activePreviewButton.classList.add('active-preview');
       }
 
-      if (currentObject) {
-        scene.remove(currentObject);
-        currentObject.traverse(obj => {
-          if (obj.geometry) obj.geometry.dispose();
-          if (obj.material) {
-            if (Array.isArray(obj.material)) {
-              obj.material.forEach(m => m.dispose && m.dispose());
-            } else if (obj.material.dispose) {
-              obj.material.dispose();
-            }
-          }
-        });
-        currentObject = null;
-      }
+      clearCurrentObject();
 
-      loader.load(
-        url,
-        (object) => {
-          currentObject = object;
-          scene.add(object);
-          centerObject(object);
-        },
-        undefined,
-        (error) => {
-          console.error('Error loading 3MF model:', error);
-        }
-      );
+      const onLoaded = (object) => {
+        currentObject = object;
+        scene.add(object);
+        centerObject(object);
+      };
+
+      const onError = (err) => {
+        console.error('Error loading model:', type, relativePath, err);
+      };
+
+      if (type === '3mf') {
+        threeMFLoader.load(url, onLoaded, undefined, onError);
+      } else if (type === 'stl') {
+        stlLoader.load(
+          url,
+          (geometry) => {
+            const material = new THREE.MeshStandardMaterial({ metalness: 0.1, roughness: 0.6 });
+            const mesh = new THREE.Mesh(geometry, material);
+            onLoaded(mesh);
+          },
+          undefined,
+          onError
+        );
+      }
     }
 
-    // --- fetch list of files from GitHub API ---
+    // Group files by base name: foo.3mf, foo.stl, foo.f3d -> one "model"
+    function groupByBaseName(files) {
+      const groups = {};
+      files.forEach((item) => {
+        const m = item.name.match(/^(.*)\.(3mf|stl|f3d)$/i);
+        if (!m) return;
+        const base = m[1];
+        const ext = m[2].toLowerCase();
+
+        if (!groups[base]) {
+          groups[base] = { base, threeMF: null, stl: null, f3d: null };
+        }
+
+        if (ext === '3mf') groups[base].threeMF = item;
+        if (ext === 'stl') groups[base].stl = item;
+        if (ext === 'f3d') groups[base].f3d = item;
+      });
+
+      return Object.values(groups).sort((a, b) => a.base.localeCompare(b.base));
+    }
+
     async function loadFileList() {
       const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
       const res = await fetch(apiUrl);
       if (!res.ok) {
-        fileListEl.textContent = 'Failed to load file list.';
+        modelsContainer.textContent = 'Failed to load file list.';
         console.error('GitHub API error', res.status, await res.text());
         return;
       }
       const data = await res.json();
 
-      const models = data.filter(item =>
-        item.type === 'file' && item.name.toLowerCase().endsWith('.3mf')
+      // filter only the extensions we care about
+      const relevant = data.filter((item) =>
+        item.type === 'file' &&
+        /\.(3mf|stl|f3d)$/i.test(item.name)
       );
 
-      if (models.length === 0) {
-        fileListEl.textContent = 'No .3mf files found in /3D';
+      if (relevant.length === 0) {
+        modelsContainer.textContent = 'No .3mf, .stl, or .f3d files found in /3D';
         return;
       }
 
-      models.forEach((file, index) => {
-        const div = document.createElement('div');
-        div.className = 'file-entry';
-        div.textContent = file.name;
-        div.addEventListener('click', () => {
-          loadModel(`${path}/${file.name}`, div);
-        });
-        fileListEl.appendChild(div);
+      const grouped = groupByBaseName(relevant);
 
-        // autoload first model
-        if (index === 0) {
-          loadModel(`${path}/${file.name}`, div);
+      let firstPreviewHook = null;
+
+      grouped.forEach((group) => {
+        const entry = document.createElement('div');
+        entry.className = 'model-entry';
+
+        const title = document.createElement('div');
+        title.className = 'model-name';
+        title.textContent = group.base;
+        entry.appendChild(title);
+
+        const actions = document.createElement('div');
+        actions.className = 'model-actions';
+
+        // preview + download for 3MF
+        if (group.threeMF) {
+          const preview3mfBtn = document.createElement('button');
+          preview3mfBtn.textContent = 'Preview 3MF';
+          const relPath = `${path}/${group.threeMF.name}`;
+          preview3mfBtn.addEventListener('click', () => {
+            loadModel(relPath, '3mf', preview3mfBtn);
+          });
+          actions.appendChild(preview3mfBtn);
+
+          const dl3mf = document.createElement('a');
+          dl3mf.textContent = 'Download 3MF';
+          dl3mf.href = `/${path}/${group.threeMF.name}`;
+          dl3mf.download = group.threeMF.name;
+          actions.appendChild(dl3mf);
+
+          if (!firstPreviewHook) firstPreviewHook = () => preview3mfBtn.click();
         }
+
+        // preview + download for STL
+        if (group.stl) {
+          const previewStlBtn = document.createElement('button');
+          previewStlBtn.textContent = 'Preview STL';
+          const relPath = `${path}/${group.stl.name}`;
+          previewStlBtn.addEventListener('click', () => {
+            loadModel(relPath, 'stl', previewStlBtn);
+          });
+          actions.appendChild(previewStlBtn);
+
+          const dlStl = document.createElement('a');
+          dlStl.textContent = 'Download STL';
+          dlStl.href = `/${path}/${group.stl.name}`;
+          dlStl.download = group.stl.name;
+          actions.appendChild(dlStl);
+
+          if (!firstPreviewHook) firstPreviewHook = () => previewStlBtn.click();
+        }
+
+        // download-only for F3D
+        if (group.f3d) {
+          const dlF3d = document.createElement('a');
+          dlF3d.textContent = 'Download F3D';
+          dlF3d.href = `/${path}/${group.f3d.name}`;
+          dlF3d.download = group.f3d.name;
+          actions.appendChild(dlF3d);
+        }
+
+        entry.appendChild(actions);
+        modelsContainer.appendChild(entry);
       });
+
+      // auto-preview first available model
+      if (firstPreviewHook) {
+        firstPreviewHook();
+      }
     }
 
     loadFileList();
