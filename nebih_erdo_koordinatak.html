@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <title>NÉBIH GML → KML konvertáló (GetFeatureInfo wrapper)</title>
+  <style>
+    html {
+      font-family: Helvetica, Arial, sans-serif;
+      display: inline-block;
+      margin: 0 auto;
+      text-align: center;
+    }
+    body {
+      margin-top: 50px;
+      background-color: wheat;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    h1 {
+      color: #444444;
+      margin: 20px auto 10px;
+    }
+    h2, h3 {
+      color: #444444;
+      margin-top: 25px;
+      margin-bottom: 10px;
+    }
+    #container {
+      max-width: 1100px;
+      margin: 0 auto;
+      text-align: left;
+      background: #ffffffaa;
+      padding: 20px 30px;
+      border-radius: 10px;
+      box-shadow: 0 0 8px rgba(0,0,0,0.25);
+    }
+    label {
+      display: inline-block;
+      min-width: 140px;
+    }
+    input[type="number"],
+    input[type="text"],
+    input[type="file"] {
+      box-sizing: border-box;
+    }
+    input[type="number"],
+    input[type="text"] {
+      width: 230px;
+    }
+    .row {
+      margin-bottom: 8px;
+    }
+    textarea {
+      width: 100%;
+      height: 200px;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 12px;
+      box-sizing: border-box;
+      resize: vertical;
+    }
+    .small {
+      font-size: 11px;
+      color: #555;
+    }
+    #status {
+      margin-top: 10px;
+      font-size: 13px;
+      font-weight: bold;
+    }
+    #status.error {
+      color: #b00020;
+    }
+    #status.ok {
+      color: #006400;
+    }
+    button {
+      margin-right: 10px;
+      margin-top: 4px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      border: 1px solid #888;
+      background: #f2f2f2;
+      cursor: pointer;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+    code {
+      background: #f4f4f4;
+      padding: 2px 4px;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <h1>NÉBIH erdőtérkép – GetFeatureInfo URL generátor és GML → KML konvertáló</h1>
+
+    <h2><a href="https://erdoterkep.nebih.gov.hu/">A NÉBIH féle erdőtérkép koordinátáinak kinyerésére</a></h2>
+    <p>
+      1) Illeszd be a koordinátát <strong>Google Maps</strong>-ből (pl. <code>47.562183, 20.092502</code>),
+      generálj egy <code>GetFeatureInfo</code> URL-t, és nyisd meg új lapon.<br />
+      2) A NÉBIH-ről letöltött GML/XML (akár <code>.application</code>) fájlt töltsd fel, és KML-t készítünk belőle.
+    </p>
+
+    <h2>1. Koordináta → GetFeatureInfo URL</h2>
+
+    <div class="row">
+      <label for="gmCoord">Google Maps coord:</label>
+      <input type="text" id="gmCoord" placeholder="47.562183, 20.092502" />
+      <button id="btnParseCoord">Szétbontás lat/lon-ra</button>
+    </div>
+
+    <div class="row">
+      <label for="lat">Lat (°):</label>
+      <input type="number" id="lat" step="0.000001" />
+    </div>
+    <div class="row">
+      <label for="lon">Lon (°):</label>
+      <input type="number" id="lon" step="0.000001" />
+    </div>
+    <div class="row">
+      <label for="radius">Sugár (m):</label>
+      <input type="number" id="radius" step="1" value="100" />
+      <span class="small">(ekkora négyzetet teszünk a pont köré BBOX-nak – túl nagy érték hibát adhat)</span>
+    </div>
+
+    <div class="row">
+      <button id="btnBuildUrl">GetFeatureInfo URL generálása</button>
+      <button id="btnOpenUrl" disabled>URL megnyitása új lapon</button>
+    </div>
+
+    <div id="status"></div>
+
+    <h3>Generált WMS GetFeatureInfo URL</h3>
+    <textarea id="urlBox" readonly></textarea>
+
+    <p class="small">
+      Ezt az URL-t megnyitva (vagy a „URL megnyitása új lapon” gombbal) a NÉBIH<br />
+      GML/XML választ ad – sokszor <code>.application</code> kiterjesztéssel. Mentsd le a fájlt, majd töltsd fel az alábbi részhez.
+    </p>
+
+    <h2>2. Letöltött GML / XML / APPLICATION → KML konvertálása</h2>
+
+    <div class="row">
+      <label for="gmlFile">GML / XML / application fájl:</label>
+      <input type="file" id="gmlFile" accept=".xml,.gml,.txt,.application" />
+    </div>
+
+    <div class="row">
+      <button id="btnProcessGml">Kiválasztott fájl feldolgozása → KML</button>
+      <button id="btnDownloadKml" disabled>Generált KML letöltése</button>
+    </div>
+
+    <h3>Feltöltött GML (nyers tartalom)</h3>
+    <textarea id="gmlBox" readonly></textarea>
+
+    <h3>Generált KML</h3>
+    <textarea id="kmlBox" readonly></textarea>
+  </div>
+
+  <script>
+    const WMS_BASE_URL = "https://erdoterkep.nebih.gov.hu/geoserver/nebih/wms";
+
+    function setStatus(msg, isError) {
+      const el = document.getElementById("status");
+      el.textContent = msg;
+      el.className = "";
+      if (msg) {
+        el.classList.add(isError ? "error" : "ok");
+      }
+    }
+
+    // Google Maps string "47.562183, 20.092502" -> lat, lon
+    function parseGoogleCoord() {
+      const raw = document.getElementById("gmCoord").value.trim();
+      if (!raw) {
+        setStatus("Nincs beillesztett koordináta.", true);
+        return;
+      }
+
+      const parts = raw.split(/[,\s]+/).filter(p => p.length > 0);
+      if (parts.length < 2) {
+        setStatus("Nem sikerült két számmá szétbontani a koordinátát.", true);
+        return;
+      }
+
+      const lat = parseFloat(parts[0].replace(",", "."));
+      const lon = parseFloat(parts[1].replace(",", "."));
+      if (isNaN(lat) || isNaN(lon)) {
+        setStatus("A beillesztett koordináta nem értelmezhető (lat/lon).", true);
+        return;
+      }
+
+      document.getElementById("lat").value = lat.toFixed(6);
+      document.getElementById("lon").value = lon.toFixed(6);
+      setStatus("Koordináta sikeresen szétbontva lat / lon mezőkbe.", false);
+    }
+
+    // WGS84 (lat, lon) -> WebMercator EPSG:3857 (x, y)
+    function wgs84ToWebMercator(lonDeg, latDeg) {
+      const R = 6378137.0;
+      const lonRad = lonDeg * Math.PI / 180.0;
+      const latRad = latDeg * Math.PI / 180.0;
+      const x = R * lonRad;
+      const y = Math.log(Math.tan(Math.PI / 4.0 + latRad / 2.0)) * R;
+      return { x, y };
+    }
+
+    function buildGetFeatureInfoUrl() {
+      const latStr = document.getElementById("lat").value;
+      const lonStr = document.getElementById("lon").value;
+      const radiusStr = document.getElementById("radius").value;
+
+      const lat = parseFloat(latStr.replace(",", "."));
+      const lon = parseFloat(lonStr.replace(",", "."));
+      const radius = parseFloat(radiusStr);
+
+      if (isNaN(lat) || isNaN(lon) || isNaN(radius)) {
+        setStatus("Hibás lat / lon / sugár érték.", true);
+        return null;
+      }
+
+      const { x, y } = wgs84ToWebMercator(lon, lat);
+
+      const minx = x - radius;
+      const maxx = x + radius;
+      const miny = y - radius;
+      const maxy = y + radius;
+
+      const width = 256;
+      const height = 256;
+      const X = Math.floor(width / 2);
+      const Y = Math.floor(height / 2);
+
+      const params = new URLSearchParams({
+        LAYERS: "NYILVANOS_ERDOTERVI_ADATOK,SZRE_VW,KUL_RESZLET_VW",
+        QUERY_LAYERS: "NYILVANOS_ERDOTERVI_ADATOK,SZRE_VW,KUL_RESZLET_VW",
+        STYLES: ",,",
+        SERVICE: "WMS",
+        VERSION: "1.1.1",
+        REQUEST: "GetFeatureInfo",
+        BBOX: `${minx},${miny},${maxx},${maxy}`,
+        FEATURE_COUNT: "50",
+        HEIGHT: height.toString(),
+        WIDTH: width.toString(),
+        FORMAT: "image/png8",
+        INFO_FORMAT: "application/vnd.ogc.gml",
+        SRS: "EPSG:3857",
+        X: X.toString(),
+        Y: Y.toString()
+      });
+
+      const url = `${WMS_BASE_URL}?${params.toString()}`;
+      return url;
+    }
+
+    function onBuildUrlClick() {
+      const url = buildGetFeatureInfoUrl();
+      if (!url) {
+        return;
+      }
+      document.getElementById("urlBox").value = url;
+      document.getElementById("btnOpenUrl").disabled = false;
+      setStatus("URL legenerálva. Nyisd meg új lapon és mentsd le a GML/XML választ.", false);
+    }
+
+    function onOpenUrlClick() {
+      const url = document.getElementById("urlBox").value.trim();
+      if (!url) {
+        setStatus("Nincs URL a megnyitáshoz.", true);
+        return;
+      }
+      window.open(url, "_blank");
+    }
+
+    // WebMercator EPSG:3857 (x, y) -> WGS84 (lon, lat)
+    function webMercatorToWgs84(x, y) {
+      const R = 6378137.0;
+      const lonRad = x / R;
+      const latRad = 2.0 * Math.atan(Math.exp(y / R)) - Math.PI / 2.0;
+      const lonDeg = lonRad * 180.0 / Math.PI;
+      const latDeg = latRad * 180.0 / Math.PI;
+      return { lon: lonDeg, lat: latDeg };
+    }
+
+    // Random KML color generator: aabbggrr, with aa = 7F (~50% alpha)
+    function randomKmlColor() {
+      const a = 0x7F; // 50% transparency
+      const r = Math.floor(Math.random() * 256);
+      const g = Math.floor(Math.random() * 256);
+      const b = Math.floor(Math.random() * 256);
+      const aa = a.toString(16).padStart(2, "0");
+      const rr = r.toString(16).padStart(2, "0");
+      const gg = g.toString(16).padStart(2, "0");
+      const bb = b.toString(16).padStart(2, "0");
+      // KML: aabbggrr
+      return aa + bb + gg + rr;
+    }
+
+    function gmlToKml(gmlText) {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(gmlText, "text/xml");
+
+      const gmlNS = "http://www.opengis.net/gml";
+      const nebihNS = "http://www.nebih.gov.hu/";
+
+      const featureMembers = doc.getElementsByTagNameNS(gmlNS, "featureMember");
+      const kmlPlacemarks = [];
+
+      for (let i = 0; i < featureMembers.length; i++) {
+        const fm = featureMembers[i];
+
+        const kulNodes = fm.getElementsByTagNameNS(nebihNS, "KUL_RESZLET_VW");
+        if (!kulNodes || kulNodes.length === 0) {
+          continue;
+        }
+        const kul = kulNodes[0];
+
+        let name = "";
+        const keresNode = kul.getElementsByTagNameNS(nebihNS, "KERES")[0];
+        const reszletNode = kul.getElementsByTagNameNS(nebihNS, "RESZLET")[0];
+        const retIdNode = kul.getElementsByTagNameNS(nebihNS, "RET_ID")[0];
+
+        if (keresNode && keresNode.textContent.trim()) {
+          name = keresNode.textContent.trim();
+        } else if (reszletNode && reszletNode.textContent.trim()) {
+          name = reszletNode.textContent.trim();
+        } else if (retIdNode && retIdNode.textContent.trim()) {
+          name = retIdNode.textContent.trim();
+        } else {
+          name = `Feature_${i + 1}`;
+        }
+
+        const alakzatNodes = kul.getElementsByTagNameNS(nebihNS, "ALAKZAT");
+        if (!alakzatNodes || alakzatNodes.length === 0) {
+          continue;
+        }
+        const alakzat = alakzatNodes[0];
+
+        const multiPolygons = alakzat.getElementsByTagNameNS(gmlNS, "MultiPolygon");
+        if (multiPolygons && multiPolygons.length > 0) {
+          const mp = multiPolygons[0];
+          const polygonMembers = mp.getElementsByTagNameNS(gmlNS, "polygonMember");
+
+          for (let j = 0; j < polygonMembers.length; j++) {
+            const poly = polygonMembers[j].getElementsByTagNameNS(gmlNS, "Polygon")[0];
+            if (poly) {
+              const partName = polygonMembers.length > 1 ? `${name} (rész ${j + 1})` : name;
+              const kmlPoly = polygonToKml(poly, partName);
+              if (kmlPoly) {
+                kmlPlacemarks.push(kmlPoly);
+              }
+            }
+          }
+          continue;
+        }
+
+        const polygons = alakzat.getElementsByTagNameNS(gmlNS, "Polygon");
+        if (polygons && polygons.length > 0) {
+          for (let j = 0; j < polygons.length; j++) {
+            const poly = polygons[j];
+            const partName = polygons.length > 1 ? `${name} (rész ${j + 1})` : name;
+            const kmlPoly = polygonToKml(poly, partName);
+            if (kmlPoly) {
+              kmlPlacemarks.push(kmlPoly);
+            }
+          }
+        }
+      }
+
+      if (kmlPlacemarks.length === 0) {
+        return null;
+      }
+
+      const kml =
+        `<?xml version="1.0" encoding="UTF-8"?>
+` +
+        `<kml xmlns="http://www.opengis.net/kml/2.2">
+` +
+        `  <Document>
+` +
+        `    <name>NÉBIH GetFeatureInfo eredmény</name>
+` +
+        kmlPlacemarks.join("\n") +
+        `
+  </Document>
+` +
+        `</kml>
+`;
+
+      return kml;
+    }
+
+    function polygonToKml(gmlPolygon, name) {
+      const gmlNS = "http://www.opengis.net/gml";
+      const coordsNodes = gmlPolygon.getElementsByTagNameNS(gmlNS, "coordinates");
+      if (!coordsNodes || coordsNodes.length === 0) {
+        return null;
+      }
+
+      const coordsText = coordsNodes[0].textContent.trim();
+      if (!coordsText) {
+        return null;
+      }
+
+      const coordPairs = coordsText.split(/\s+/);
+      const kmlCoords = coordPairs.map(pair => {
+        const [xStr, yStr] = pair.split(",");
+        const x = parseFloat(xStr);
+        const y = parseFloat(yStr);
+        if (isNaN(x) || isNaN(y)) {
+          return null;
+        }
+        const { lon, lat } = webMercatorToWgs84(x, y);
+        return `${lon.toFixed(8)},${lat.toFixed(8)},0`;
+      }).filter(c => c !== null);
+
+      if (kmlCoords.length === 0) {
+        return null;
+      }
+
+      const fillColor = randomKmlColor(); // véletlen szín, 50% alpha
+      const outlineColor = "ff000000";    // fekete körvonal, 1px
+
+      const kml =
+        `    <Placemark>\n` +
+        `      <name>${escapeXml(name)}</name>\n` +
+        `      <Style>\n` +
+        `        <LineStyle>\n` +
+        `          <color>${outlineColor}</color>\n` +
+        `          <width>1</width>\n` +
+        `        </LineStyle>\n` +
+        `        <PolyStyle>\n` +
+        `          <color>${fillColor}</color>\n` +
+        `          <fill>1</fill>\n` +
+        `          <outline>1</outline>\n` +
+        `        </PolyStyle>\n` +
+        `      </Style>\n` +
+        `      <Polygon>\n` +
+        `        <outerBoundaryIs>\n` +
+        `          <LinearRing>\n` +
+        `            <coordinates>\n` +
+        `              ${kmlCoords.join(" ")}\n` +
+        `            </coordinates>\n` +
+        `          </LinearRing>\n` +
+        `        </outerBoundaryIs>\n` +
+        `      </Polygon>\n` +
+        `    </Placemark>`;
+
+      return kml;
+    }
+
+    function escapeXml(str) {
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&apos;");
+    }
+
+    function onProcessGmlClick() {
+      const fileInput = document.getElementById("gmlFile");
+      const file = fileInput.files && fileInput.files[0];
+      if (!file) {
+        setStatus("Nem választottál fájlt.", true);
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const text = e.target.result;
+        document.getElementById("gmlBox").value = text;
+
+        const kml = gmlToKml(text);
+        if (!kml) {
+          setStatus("Nem találtam Polygon / MultiPolygon geometriát a GML-ben.", true);
+          document.getElementById("kmlBox").value = "";
+          document.getElementById("btnDownloadKml").disabled = true;
+          return;
+        }
+
+        document.getElementById("kmlBox").value = kml;
+        document.getElementById("btnDownloadKml").disabled = false;
+        setStatus("Sikeres konverzió: KML generálva a feltöltött fájlból.", false);
+      };
+      reader.onerror = function () {
+        setStatus("Hiba a fájl beolvasása közben.", true);
+      };
+      reader.readAsText(file);
+    }
+
+    function onDownloadKmlClick() {
+      const kml = document.getElementById("kmlBox").value;
+      if (!kml || !kml.trim()) {
+        setStatus("Nincs generált KML a letöltéshez.", true);
+        return;
+      }
+
+      const blob = new Blob([kml], { type: "application/vnd.google-earth.kml+xml" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "nebih_feature.kml";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    document.getElementById("btnParseCoord").addEventListener("click", parseGoogleCoord);
+    document.getElementById("btnBuildUrl").addEventListener("click", onBuildUrlClick);
+    document.getElementById("btnOpenUrl").addEventListener("click", onOpenUrlClick);
+    document.getElementById("btnProcessGml").addEventListener("click", onProcessGmlClick);
+    document.getElementById("btnDownloadKml").addEventListener("click", onDownloadKmlClick);
+  </script>
+</body>
+</html>
