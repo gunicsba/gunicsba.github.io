@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>RTK Base Heatmap Generator</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Arial;margin:16px;}
+    .row{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end}
+    label{display:block;font-size:12px;color:#333;margin-bottom:4px}
+    input,select,button{padding:8px;font-size:14px}
+    .card{border:1px solid #ddd;border-radius:10px;padding:12px}
+    canvas{border:1px solid #ddd;border-radius:10px;max-width:100%;height:auto}
+    .small{font-size:12px;color:#555}
+  </style>
+</head>
+<body>
+  <h2>RTK Base Heatmap Generator (offline)</h2>
+
+  <div class="row">
+    <div class="card">
+      <label>crtk.net (txt) fájl</label>
+      <input id="file" type="file" accept=".txt,.csv,.net,.dat" />
+      <div class="small">STR sorokból olvas: lat/lon = 9–10. mező (0-indexelve).</div>
+    </div>
+
+    <div class="card">
+      <label>Kimenet (px)</label>
+      <div class="row">
+        <div>
+          <label>Szélesség</label>
+          <input id="w" type="number" value="2400" min="100" step="100"/>
+        </div>
+        <div>
+          <label>Magasság</label>
+          <input id="h" type="number" value="1600" min="100" step="100"/>
+        </div>
+      </div>
+      <div class="small">Nyomdához: pl. 20000 × 10000.</div>
+    </div>
+
+    <div class="card">
+      <label>Hatótáv</label>
+      <div class="row">
+        <div>
+          <label>Radius (km)</label>
+          <input id="rkm" type="number" value="20" min="1" step="1"/>
+        </div>
+        <div>
+          <label>Mód</label>
+          <select id="mode">
+            <option value="gauss" selected>Gaussian (sima)</option>
+            <option value="hard">Hard cutoff (éles 0 a radius után)</option>
+          </select>
+        </div>
+      </div>
+      <div class="small">Gaussian esetén a “látható” folt túlnyúlhat a beállított km-en.</div>
+    </div>
+
+    <div class="card">
+      <label>Háttér</label>
+      <div class="row">
+        <div>
+          <label><input id="bgMap" type="checkbox" checked/> Offline “map” (rács+felirat)</label>
+        </div>
+        <div>
+          <label><input id="transparent" type="checkbox"/> Átlátszó háttér</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <button id="gen">Generate</button>
+      <button id="dl" disabled>Download PNG</button>
+      <div id="status" class="small" style="margin-top:6px;"></div>
+    </div>
+  </div>
+
+  <p></p>
+  <canvas id="cv" width="2400" height="1600"></canvas>
+
+<script>
+const bbox = { minLon:16.0, maxLon:24.5, minLat:44.5, maxLat:49.8 }; // HU + N SRB + RO + SK buffer
+
+function parseSTR(text){
+  const pts = [];
+  const lines = text.split(/\r?\n/);
+  for (const line of lines){
+    if (!line.startsWith("STR;")) continue;
+    const p = line.split(";");
+    if (p.length < 11) continue;
+    const lat = Number(p[9]);
+    const lon = Number(p[10]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    if (lat < bbox.minLat || lat > bbox.maxLat || lon < bbox.minLon || lon > bbox.maxLon) continue;
+    pts.push({lat, lon});
+  }
+  return pts;
+}
+
+function lonLatToXY(lon, lat, W, H){
+  const x = (lon - bbox.minLon) / (bbox.maxLon - bbox.minLon) * (W - 1);
+  const y = (bbox.maxLat - lat) / (bbox.maxLat - bbox.minLat) * (H - 1);
+  return {x, y};
+}
+
+function kmPerPx(W,H){
+  const midLat = (bbox.minLat + bbox.maxLat) / 2;
+  const kmPerDegLat = 111.0;
+  const kmPerDegLon = 111.0 * Math.cos(midLat * Math.PI/180);
+
+  const degPerPxX = (bbox.maxLon - bbox.minLon) / W;
+  const degPerPxY = (bbox.maxLat - bbox.minLat) / H;
+  return {
+    x: degPerPxX * kmPerDegLon,
+    y: degPerPxY * kmPerDegLat
+  };
+}
+
+function drawOfflineBg(ctx, W, H){
+  ctx.save();
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = "rgb(245,245,245)";
+  ctx.fillRect(0,0,W,H);
+
+  // grid
+  ctx.strokeStyle = "rgb(220,220,220)";
+  ctx.lineWidth = 1;
+
+  for (let lon = 16; lon <= 25; lon++){
+    const x = (lon - bbox.minLon) / (bbox.maxLon - bbox.minLon) * W;
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+  }
+  for (let lat = 45; lat <= 50; lat++){
+    const y = (bbox.maxLat - lat) / (bbox.maxLat - bbox.minLat) * H;
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+  }
+
+  // labels
+  ctx.fillStyle = "rgb(180,180,180)";
+  ctx.font = `${Math.max(24, Math.floor(W/50))}px sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const labels = [
+    ["HUNGARY", 0.45, 0.45],
+    ["SERBIA",  0.45, 0.75],
+    ["ROMANIA", 0.78, 0.55],
+    ["SLOVAKIA",0.45, 0.15],
+  ];
+  for (const [t, fx, fy] of labels){
+    ctx.fillText(t, fx*W, fy*H);
+  }
+  ctx.restore();
+}
+
+function setStatus(msg){ document.getElementById("status").textContent = msg; }
+
+// Fast “splat” approach: draw radial gradients per base.
+// This scales well to very large canvases (20000x10000) if your machine bírja.
+function drawHeat(ctx, pts, W, H, radiusKm, mode){
+  const k = kmPerPx(W,H);
+  // use geometric mean for “radius in px”
+  const rpx = radiusKm / Math.sqrt(k.x * k.y);
+  const r = Math.max(2, rpx);
+
+  // Offscreen layer to accumulate alpha
+  const off = document.createElement("canvas");
+  off.width = W; off.height = H;
+  const octx = off.getContext("2d", { willReadFrequently:false });
+
+  // Accumulate with additive blending
+  octx.clearRect(0,0,W,H);
+  octx.globalCompositeOperation = "lighter";
+
+  for (let i=0;i<pts.length;i++){
+    const {x,y} = lonLatToXY(pts[i].lon, pts[i].lat, W, H);
+
+    const g = octx.createRadialGradient(x,y,0, x,y,r);
+    if (mode === "hard"){
+      // Hard cutoff: flat inside, 0 outside (approx step)
+      g.addColorStop(0.0, "rgba(0,255,0,0.20)");
+      g.addColorStop(0.999, "rgba(0,255,0,0.20)");
+      g.addColorStop(1.0, "rgba(0,255,0,0.0)");
+    } else {
+      // Gaussian-ish falloff (approx via stops)
+      g.addColorStop(0.0, "rgba(0,255,0,0.22)");
+      g.addColorStop(0.35,"rgba(0,255,0,0.12)");
+      g.addColorStop(0.70,"rgba(0,255,0,0.05)");
+      g.addColorStop(1.0, "rgba(0,255,0,0.0)");
+    }
+
+    octx.fillStyle = g;
+    octx.beginPath();
+    octx.arc(x,y,r,0,Math.PI*2);
+    octx.fill();
+
+    if (i % 50 === 0) setStatus(`Splat: ${i}/${pts.length}`);
+  }
+
+  // Colorize: map accumulated alpha to green channel + alpha
+  const img = octx.getImageData(0,0,W,H);
+  const d = img.data;
+
+  // Find max alpha
+  let maxA = 1;
+  for (let i=3;i<d.length;i+=4) if (d[i] > maxA) maxA = d[i];
+
+  // Normalize + contrast
+  const gamma = 0.6;
+  for (let i=0;i<d.length;i+=4){
+    const a = d[i+3] / maxA; // 0..1
+    if (a <= 0.01){
+      d[i+3] = 0; // transparent
+      continue;
+    }
+    const v = Math.pow(a, gamma);
+    // light green -> dark green via alpha + green channel
+    d[i]   = 0;
+    d[i+1] = Math.round(90 + (255-90)*v);
+    d[i+2] = 0;
+    d[i+3] = Math.round(50 + (255-50)*v);
+  }
+
+  // Put final layer on main ctx
+  ctx.putImageData(img,0,0);
+  setStatus("Colorize done.");
+}
+
+let lastCanvas = null;
+
+document.getElementById("gen").addEventListener("click", async () => {
+  const file = document.getElementById("file").files[0];
+  if (!file){ setStatus("Nincs fájl kiválasztva."); return; }
+
+  const W = Number(document.getElementById("w").value);
+  const H = Number(document.getElementById("h").value);
+  const rkm = Number(document.getElementById("rkm").value);
+  const mode = document.getElementById("mode").value;
+  const bgMap = document.getElementById("bgMap").checked;
+  const transparent = document.getElementById("transparent").checked;
+
+  const cv = document.getElementById("cv");
+  cv.width = W; cv.height = H;
+  const ctx = cv.getContext("2d", { willReadFrequently:true });
+
+  setStatus("Fájl beolvasása...");
+  const text = await file.text();
+  const pts = parseSTR(text);
+  setStatus(`Pontok: ${pts.length}. Háttér...`);
+
+  if (transparent){
+    ctx.clearRect(0,0,W,H);
+  } else if (bgMap){
+    drawOfflineBg(ctx,W,H);
+  } else {
+    ctx.fillStyle = "white";
+    ctx.fillRect(0,0,W,H);
+  }
+
+  // Draw heat layer on top using offscreen then composite
+  setStatus("Heatmap generálás...");
+  const heatLayer = document.createElement("canvas");
+  heatLayer.width = W; heatLayer.height = H;
+  const hctx = heatLayer.getContext("2d", { willReadFrequently:true });
+
+  drawHeat(hctx, pts, W, H, rkm, mode);
+
+  // Composite heat over background
+  ctx.save();
+  ctx.globalCompositeOperation = "source-over";
+  ctx.drawImage(heatLayer, 0, 0);
+  ctx.restore();
+
+  lastCanvas = cv;
+  document.getElementById("dl").disabled = false;
+  setStatus("Kész.");
+});
+
+document.getElementById("dl").addEventListener("click", () => {
+  if (!lastCanvas) return;
+  const a = document.createElement("a");
+  a.download = "rtk_heatmap.png";
+  a.href = lastCanvas.toDataURL("image/png");
+  a.click();
+});
+</script>
+</body>
+</html>
