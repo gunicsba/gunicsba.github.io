@@ -1,0 +1,11 @@
+Windows Registry Editor Version 5.00
+
+; Documented here: https://docs.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2008-R2-and-2008/gg252535(v=ws.10)
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Network\NewNetworkWindowOff]
+
+;AOG fix for using 4G net while wired connection exist
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\WcmSvc\GroupPolicy]
+"fMinimizeConnections"=dword:00000000
+
+
+
