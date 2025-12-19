@@ -3,99 +3,189 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>RTK Base Heatmap Generator</title>
+  <title>RTK Heatmap (offline-ish)</title>
   <style>
-    body{font-family:system-ui,Segoe UI,Arial;margin:16px;}
-    .row{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end}
+    :root { --card:#fff; --border:#ddd; --muted:#666; --bg:#f6f6f6; }
+    body{font-family:system-ui,Segoe UI,Arial;margin:0;background:var(--bg);color:#111}
+    header{padding:14px 16px;border-bottom:1px solid var(--border);background:#fff}
+    h1{font-size:18px;margin:0}
+    .wrap{padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+    canvas{border:1px solid var(--border);border-radius:12px;max-width:100%;height:auto;background:transparent}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px}
+    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
     label{display:block;font-size:12px;color:#333;margin-bottom:4px}
-    input,select,button{padding:8px;font-size:14px}
-    .card{border:1px solid #ddd;border-radius:10px;padding:12px}
-    canvas{border:1px solid #ddd;border-radius:10px;max-width:100%;height:auto}
-    .small{font-size:12px;color:#555}
+    input,select,button,textarea{padding:8px;font-size:14px}
+    button{cursor:pointer}
+    .small{font-size:12px;color:var(--muted)}
+    .kv{display:grid;grid-template-columns:160px 1fr;gap:10px;align-items:center}
+    .kv label{margin:0}
+    details summary{cursor:pointer;font-weight:600}
+    .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
+    .status{margin-top:8px}
   </style>
 </head>
 <body>
-  <h2>RTK Base Heatmap Generator (offline)</h2>
+<header>
+  <h1>RTK Base Heatmap (HU + N SRB + RO + SK buffer)</h1>
+</header>
 
-  <div class="row">
-    <div class="card">
-      <label>crtk.net (txt) fájl</label>
-      <input id="file" type="file" accept=".txt,.csv,.net,.dat" />
-      <div class="small">STR sorokból olvas: lat/lon = 9–10. mező (0-indexelve).</div>
-    </div>
+<div class="wrap">
 
-    <div class="card">
-      <label>Kimenet (px)</label>
-      <div class="row">
-        <div>
-          <label>Szélesség</label>
-          <input id="w" type="number" value="2400" min="100" step="100"/>
-        </div>
-        <div>
-          <label>Magasság</label>
-          <input id="h" type="number" value="1600" min="100" step="100"/>
-        </div>
-      </div>
-      <div class="small">Nyomdához: pl. 20000 × 10000.</div>
-    </div>
-
-    <div class="card">
-      <label>Hatótáv</label>
-      <div class="row">
-        <div>
-          <label>Radius (km)</label>
-          <input id="rkm" type="number" value="20" min="1" step="1"/>
-        </div>
-        <div>
-          <label>Mód</label>
-          <select id="mode">
-            <option value="gauss" selected>Gaussian (sima)</option>
-            <option value="hard">Hard cutoff (éles 0 a radius után)</option>
-          </select>
-        </div>
-      </div>
-      <div class="small">Gaussian esetén a “látható” folt túlnyúlhat a beállított km-en.</div>
-    </div>
-
-    <div class="card">
-      <label>Háttér</label>
-      <div class="row">
-        <div>
-          <label><input id="bgMap" type="checkbox" checked/> Offline “map” (rács+felirat)</label>
-        </div>
-        <div>
-          <label><input id="transparent" type="checkbox"/> Átlátszó háttér</label>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <button id="gen">Generate</button>
+  <!-- CANVAS FIRST -->
+  <div class="card">
+    <canvas id="cv" width="2400" height="1600"></canvas>
+    <div id="status" class="small status"></div>
+    <div class="row" style="margin-top:10px">
+      <button id="regen">Regenerate</button>
       <button id="dl" disabled>Download PNG</button>
-      <div id="status" class="small" style="margin-top:6px;"></div>
     </div>
   </div>
 
-  <p></p>
-  <canvas id="cv" width="2400" height="1600"></canvas>
+  <!-- SETTINGS AT THE BOTTOM -->
+  <div class="card">
+    <details open>
+      <summary>Settings</summary>
+      <div class="small" style="margin:8px 0 10px 0">
+        A GeoJSON fájlokat a HTML mellől tölti: <span class="mono">countries.geojson</span> és <span class="mono">rivers.geojson</span>.
+        A bázislistát URL-ről próbálja (<span class="mono">crtkUrl</span>), CORS esetén file feltöltéssel pótolható.
+      </div>
+
+      <div class="row">
+        <div class="card" style="padding:10px">
+          <label>crtk.net forrás URL (TXT)</label>
+          <input id="crtkUrl" class="mono" style="width:min(860px, 90vw)" value="https://crtk.net/" />
+          <div class="small">Ha a szerver nem enged CORS-t, a böngésző blokkolni fogja. Ilyenkor töltsd fel fájlból lent.</div>
+        </div>
+
+        <div class="card" style="padding:10px">
+          <label>Fallback: crtk.net fájl (ha CORS blokkol)</label>
+          <input id="crtkFile" type="file" accept=".txt,.net,.dat,.csv" />
+          <div class="small">STR sorok: <span class="mono">STR;mount;country;...;lat;lon;...</span> → name=mount (p[1])</div>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <div class="card" style="padding:10px">
+          <label>Kimenet (px)</label>
+          <div class="row">
+            <div>
+              <label>Szélesség</label>
+              <input id="w" type="number" value="4800" min="200" step="100"/>
+            </div>
+            <div>
+              <label>Magasság</label>
+              <input id="h" type="number" value="3200" min="200" step="100"/>
+            </div>
+          </div>
+          <div class="small">Nagy méretnél (pl. 20000×10000) a böngésző/RAM lehet a limit.</div>
+        </div>
+
+        <div class="card" style="padding:10px">
+          <label>Hatótáv / heat</label>
+          <div class="row">
+            <div>
+              <label>Radius (km)</label>
+              <input id="rkm" type="number" value="35" min="1" step="1"/>
+            </div>
+            <div>
+              <label>Mód</label>
+              <select id="mode">
+                <option value="gauss" selected>Gaussian (sima)</option>
+                <option value="hard">Hard cutoff (éles)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="padding:10px">
+          <label>Háttér</label>
+          <div class="row">
+            <label><input id="bgMap" type="checkbox" checked/> Offline háttér (rács+felirat)</label>
+            <label><input id="transparent" type="checkbox"/> Átlátszó háttér</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <div class="card" style="padding:10px; min-width:320px">
+          <label>Layer: ország-határok</label>
+          <div class="row">
+            <label><input id="bordersOn" type="checkbox" checked/> bekapcsolva</label>
+            <div>
+              <label>Szín</label>
+              <input id="bordersColor" type="color" value="#444444"/>
+            </div>
+            <div>
+              <label>Vastagság</label>
+              <input id="bordersW" type="number" value="2" min="1" step="1"/>
+            </div>
+            <div>
+              <label>Alpha</label>
+              <input id="bordersA" type="number" value="0.65" min="0" max="1" step="0.05"/>
+            </div>
+          </div>
+          <div class="small">Forrás: <span class="mono">./countries.geojson</span></div>
+        </div>
+
+        <div class="card" style="padding:10px; min-width:320px">
+          <label>Layer: vizek</label>
+          <div class="row">
+            <label><input id="watersOn" type="checkbox" checked/> bekapcsolva</label>
+            <div>
+              <label>Szín</label>
+              <input id="watersColor" type="color" value="#3b82f6"/>
+            </div>
+            <div>
+              <label>Vastagság</label>
+              <input id="watersW" type="number" value="2" min="1" step="1"/>
+            </div>
+            <div>
+              <label>Alpha</label>
+              <input id="watersA" type="number" value="0.65" min="0" max="1" step="0.05"/>
+            </div>
+          </div>
+          <div class="small">Forrás: <span class="mono">./waters_merged.geojson</span></div>
+        </div>
+
+        <div class="card" style="padding:10px; min-width:320px">
+          <label>Feliratok / jelmagyarázat</label>
+          <div class="row">
+            <label><input id="labelsOn" type="checkbox" checked/> Bázisnevek</label>
+            <label><input id="legendOn" type="checkbox" checked/> Jelmagyarázat</label>
+          </div>
+
+          <div class="kv" style="margin-top:8px">
+            <label>Label szín</label><input id="labelColor" type="color" value="#0b3d0b"/>
+            <label>Label font</label><input id="labelFont" value="DejaVu Sans, Arial, sans-serif"/>
+            <label>Label méret</label><input id="labelFS" type="number" value="14" min="8" step="1"/>
+            <label>Halo szín</label><input id="labelOutline" type="color" value="#ffffff"/>
+            <label>Halo vast.</label><input id="labelOutlineW" type="number" value="3" min="0" step="1"/>
+            <label>Eltolás X/Y</label>
+            <div class="row">
+              <input id="labelDX" type="number" value="6" step="1" style="width:100px"/>
+              <input id="labelDY" type="number" value="-6" step="1" style="width:100px"/>
+            </div>
+            <label>Legend title</label><input id="legendTitle" value="RTK Base density (20 km)" />
+          </div>
+        </div>
+      </div>
+    </details>
+  </div>
+</div>
 
 <script>
-const bbox = { minLon:16.0, maxLon:24.5, minLat:44.5, maxLat:49.8 }; // HU + N SRB + RO + SK buffer
+/** BBOX: HU + N Serbia + RO overlap + ~100 km Slovakia buffer */
+const bbox = { minLon:16.0, maxLon:24.5, minLat:44.5, maxLat:49.8 };
 
-function parseSTR(text){
-  const pts = [];
-  const lines = text.split(/\r?\n/);
-  for (const line of lines){
-    if (!line.startsWith("STR;")) continue;
-    const p = line.split(";");
-    if (p.length < 11) continue;
-    const lat = Number(p[9]);
-    const lon = Number(p[10]);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-    if (lat < bbox.minLat || lat > bbox.maxLat || lon < bbox.minLon || lon > bbox.maxLon) continue;
-    pts.push({lat, lon});
-  }
-  return pts;
+function $(id){ return document.getElementById(id); }
+function setStatus(msg){ $("status").textContent = msg; }
+
+function hexToRgba(hex, a){
+  const h = hex.replace("#","");
+  const r = parseInt(h.slice(0,2),16);
+  const g = parseInt(h.slice(2,4),16);
+  const b = parseInt(h.slice(4,6),16);
+  return `rgba(${r},${g},${b},${a})`;
 }
 
 function lonLatToXY(lon, lat, W, H){
@@ -108,13 +198,29 @@ function kmPerPx(W,H){
   const midLat = (bbox.minLat + bbox.maxLat) / 2;
   const kmPerDegLat = 111.0;
   const kmPerDegLon = 111.0 * Math.cos(midLat * Math.PI/180);
-
   const degPerPxX = (bbox.maxLon - bbox.minLon) / W;
   const degPerPxY = (bbox.maxLat - bbox.minLat) / H;
-  return {
-    x: degPerPxX * kmPerDegLon,
-    y: degPerPxY * kmPerDegLat
-  };
+  return { x: degPerPxX * kmPerDegLon, y: degPerPxY * kmPerDegLat };
+}
+
+/** NAME FIX: STR;mount;country;...;lat;lon;... -> name = mount (p[1]), country = p[2] */
+function parseSTR(text){
+  const pts = [];
+  for (const line of text.split(/\r?\n/)){
+    if (!line.startsWith("STR;")) continue;
+    const p = line.split(";");
+    if (p.length < 11) continue;
+
+    const mount = (p[1] || "").trim();
+    const country = (p[2] || "").trim();
+    const lat = Number(p[9]);
+    const lon = Number(p[10]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    if (lat < bbox.minLat || lat > bbox.maxLat || lon < bbox.minLon || lon > bbox.maxLon) continue;
+
+    pts.push({ lat, lon, name: mount || "BASE", country });
+  }
+  return pts;
 }
 
 function drawOfflineBg(ctx, W, H){
@@ -126,7 +232,6 @@ function drawOfflineBg(ctx, W, H){
   // grid
   ctx.strokeStyle = "rgb(220,220,220)";
   ctx.lineWidth = 1;
-
   for (let lon = 16; lon <= 25; lon++){
     const x = (lon - bbox.minLon) / (bbox.maxLon - bbox.minLon) * W;
     ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
@@ -142,146 +247,351 @@ function drawOfflineBg(ctx, W, H){
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   const labels = [
-    ["HUNGARY", 0.45, 0.45],
-    ["SERBIA",  0.45, 0.75],
-    ["ROMANIA", 0.78, 0.55],
-    ["SLOVAKIA",0.45, 0.15],
+    ["Magyarország", 0.45, 0.45],
+    ["Szerbia",  0.45, 0.75],
+    ["Románia", 0.78, 0.55],
+    ["Szlovákia",0.45, 0.15],
   ];
-  for (const [t, fx, fy] of labels){
-    ctx.fillText(t, fx*W, fy*H);
-  }
+  for (const [t, fx, fy] of labels) ctx.fillText(t, fx*W, fy*H);
+
   ctx.restore();
 }
 
-function setStatus(msg){ document.getElementById("status").textContent = msg; }
-
-// Fast “splat” approach: draw radial gradients per base.
-// This scales well to very large canvases (20000x10000) if your machine bírja.
-function drawHeat(ctx, pts, W, H, radiusKm, mode){
+/** Heatmap via splat gradients, then colorize */
+function drawHeatLayer(W,H,pts,radiusKm,mode){
   const k = kmPerPx(W,H);
-  // use geometric mean for “radius in px”
   const rpx = radiusKm / Math.sqrt(k.x * k.y);
   const r = Math.max(2, rpx);
 
-  // Offscreen layer to accumulate alpha
   const off = document.createElement("canvas");
   off.width = W; off.height = H;
   const octx = off.getContext("2d", { willReadFrequently:false });
-
-  // Accumulate with additive blending
   octx.clearRect(0,0,W,H);
   octx.globalCompositeOperation = "lighter";
 
   for (let i=0;i<pts.length;i++){
     const {x,y} = lonLatToXY(pts[i].lon, pts[i].lat, W, H);
-
     const g = octx.createRadialGradient(x,y,0, x,y,r);
     if (mode === "hard"){
-      // Hard cutoff: flat inside, 0 outside (approx step)
       g.addColorStop(0.0, "rgba(0,255,0,0.20)");
       g.addColorStop(0.999, "rgba(0,255,0,0.20)");
       g.addColorStop(1.0, "rgba(0,255,0,0.0)");
     } else {
-      // Gaussian-ish falloff (approx via stops)
       g.addColorStop(0.0, "rgba(0,255,0,0.22)");
       g.addColorStop(0.35,"rgba(0,255,0,0.12)");
       g.addColorStop(0.70,"rgba(0,255,0,0.05)");
       g.addColorStop(1.0, "rgba(0,255,0,0.0)");
     }
-
     octx.fillStyle = g;
     octx.beginPath();
     octx.arc(x,y,r,0,Math.PI*2);
     octx.fill();
 
-    if (i % 50 === 0) setStatus(`Splat: ${i}/${pts.length}`);
+    if (i % 80 === 0) setStatus(`Heat splat: ${i}/${pts.length}`);
   }
 
-  // Colorize: map accumulated alpha to green channel + alpha
   const img = octx.getImageData(0,0,W,H);
   const d = img.data;
 
-  // Find max alpha
   let maxA = 1;
   for (let i=3;i<d.length;i+=4) if (d[i] > maxA) maxA = d[i];
 
-  // Normalize + contrast
   const gamma = 0.6;
   for (let i=0;i<d.length;i+=4){
-    const a = d[i+3] / maxA; // 0..1
-    if (a <= 0.01){
-      d[i+3] = 0; // transparent
-      continue;
-    }
+    const a = d[i+3] / maxA;
+    if (a <= 0.01){ d[i+3] = 0; continue; }
     const v = Math.pow(a, gamma);
-    // light green -> dark green via alpha + green channel
     d[i]   = 0;
     d[i+1] = Math.round(90 + (255-90)*v);
     d[i+2] = 0;
     d[i+3] = Math.round(50 + (255-50)*v);
   }
 
-  // Put final layer on main ctx
-  ctx.putImageData(img,0,0);
-  setStatus("Colorize done.");
+  octx.putImageData(img,0,0);
+  return off;
 }
 
-let lastCanvas = null;
+/** GeoJSON drawing */
+function normalizeGeoJSON(gj){
+  if (!gj) return [];
+  if (gj.type === "FeatureCollection") return gj.features || [];
+  if (gj.type === "Feature") return [gj];
+  if (gj.type && gj.coordinates) return [{ type:"Feature", properties:{}, geometry:gj }];
+  return [];
+}
 
-document.getElementById("gen").addEventListener("click", async () => {
-  const file = document.getElementById("file").files[0];
-  if (!file){ setStatus("Nincs fájl kiválasztva."); return; }
+function drawGeometry(ctx, W, H, geom, style){
+  const proj = (pt) => {
+    const lon = pt[0], lat = pt[1];
+    const {x,y} = lonLatToXY(lon, lat, W, H);
+    return [x,y];
+  };
 
-  const W = Number(document.getElementById("w").value);
-  const H = Number(document.getElementById("h").value);
-  const rkm = Number(document.getElementById("rkm").value);
-  const mode = document.getElementById("mode").value;
-  const bgMap = document.getElementById("bgMap").checked;
-  const transparent = document.getElementById("transparent").checked;
+  function drawLineString(coords){
+    if (!coords || coords.length < 2) return;
+    ctx.beginPath();
+    const [x0,y0] = proj(coords[0]);
+    ctx.moveTo(x0,y0);
+    for (let i=1;i<coords.length;i++){
+      const [x,y] = proj(coords[i]);
+      ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  }
 
-  const cv = document.getElementById("cv");
+  function drawPolygon(rings){
+    if (!rings || rings.length === 0) return;
+    ctx.beginPath();
+    for (const ring of rings){
+      if (!ring || ring.length < 3) continue;
+      const [x0,y0] = proj(ring[0]);
+      ctx.moveTo(x0,y0);
+      for (let i=1;i<ring.length;i++){
+        const [x,y] = proj(ring[i]);
+        ctx.lineTo(x,y);
+      }
+      ctx.closePath();
+    }
+    if (style.fillStyle){
+      ctx.save();
+      ctx.globalAlpha = style.fillAlpha ?? 0.25;
+      ctx.fillStyle = style.fillStyle;
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.stroke();
+  }
+
+  ctx.save();
+  ctx.strokeStyle = style.strokeStyle;
+  ctx.lineWidth = style.lineWidth;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+
+  if (geom.type === "LineString") drawLineString(geom.coordinates);
+  else if (geom.type === "MultiLineString") geom.coordinates.forEach(drawLineString);
+  else if (geom.type === "Polygon") drawPolygon(geom.coordinates);
+  else if (geom.type === "MultiPolygon") geom.coordinates.forEach(drawPolygon);
+
+  ctx.restore();
+}
+
+async function fetchJSON(url){
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error(`Fetch failed: ${url} (${res.status})`);
+  return await res.json();
+}
+
+async function fetchText(url){
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error(`Fetch failed: ${url} (${res.status})`);
+  return await res.text();
+}
+
+async function loadCrtkText(){
+  const url = $("crtkUrl").value.trim();
+  try {
+    setStatus(`Fetching CRKT list: ${url} ...`);
+    const txt = await fetchText(url);
+    return txt;
+  } catch (e) {
+    // fallback: file
+    const f = $("crtkFile").files && $("crtkFile").files[0];
+    if (!f) throw new Error(`CRTK URL blocked/failed, and no file selected. Error: ${e.message}`);
+    setStatus(`CRTK fetch failed (${e.message}). Using file: ${f.name}`);
+    return await f.text();
+  }
+}
+
+function drawLegend(ctx, W, H){
+  if (!$("legendOn").checked) return;
+  const title = $("legendTitle").value || "";
+  const lw = 320, lh = 18, fs = 16;
+  const pad = 18;
+  const x = W - pad - lw;
+  const y = H - pad - lh - fs - 14;
+
+  ctx.save();
+  ctx.globalCompositeOperation = "source-over";
+  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  ctx.font = `${fs}px sans-serif`;
+  ctx.textBaseline = "bottom";
+  ctx.fillText(title, x, y + fs);
+
+  const barY = y + fs + 6;
+  const g = ctx.createLinearGradient(x, barY, x+lw, barY);
+  g.addColorStop(0.0, "rgba(0,90,0,0.35)");
+  g.addColorStop(1.0, "rgba(0,255,0,1.0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(x, barY, lw, lh);
+
+  ctx.strokeStyle = "rgba(0,0,0,0.15)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x, barY, lw, lh);
+
+  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  ctx.font = `13px sans-serif`;
+  ctx.textBaseline = "top";
+  ctx.fillText("low", x, barY + lh + 4);
+  const tW = ctx.measureText("high").width;
+  ctx.fillText("high", x+lw-tW, barY + lh + 4);
+  ctx.restore();
+}
+
+function drawBaseLabels(ctx, W, H, pts){
+  if (!$("labelsOn").checked) return;
+
+  const font = $("labelFont").value || "sans-serif";
+  const fs = Number($("labelFS").value);
+  const col = $("labelColor").value;
+  const outCol = $("labelOutline").value;
+  const outW = Number($("labelOutlineW").value);
+  const dx = Number($("labelDX").value);
+  const dy = Number($("labelDY").value);
+
+  ctx.save();
+  ctx.globalCompositeOperation = "source-over";
+  ctx.font = `${fs}px ${font}`;
+  ctx.textBaseline = "middle";
+  ctx.textAlign = "left";
+
+  const cell = Math.max(20, fs*2);
+  const used = new Set();
+  const keyOf = (x,y)=>`${Math.floor(x/cell)}:${Math.floor(y/cell)}`;
+
+  for (let i=0;i<pts.length;i++){
+    const {x,y} = lonLatToXY(pts[i].lon, pts[i].lat, W, H);
+    const xx = x + dx, yy = y + dy;
+    const key = keyOf(xx,yy);
+    if (used.has(key)) continue;
+    used.add(key);
+
+    const text = pts[i].name;
+
+    if (outW > 0){
+      ctx.lineWidth = outW;
+      ctx.strokeStyle = outCol;
+      ctx.strokeText(text, xx, yy);
+    }
+    ctx.fillStyle = col;
+    ctx.fillText(text, xx, yy);
+  }
+
+  ctx.restore();
+}
+
+async function regenerate(){
+  const W = Number($("w").value);
+  const H = Number($("h").value);
+  const rkm = Number($("rkm").value);
+  const mode = $("mode").value;
+  const bgMap = $("bgMap").checked;
+  const transparent = $("transparent").checked;
+
+  const cv = $("cv");
   cv.width = W; cv.height = H;
   const ctx = cv.getContext("2d", { willReadFrequently:true });
 
-  setStatus("Fájl beolvasása...");
-  const text = await file.text();
-  const pts = parseSTR(text);
-  setStatus(`Pontok: ${pts.length}. Háttér...`);
-
+  // Background
   if (transparent){
     ctx.clearRect(0,0,W,H);
   } else if (bgMap){
-    drawOfflineBg(ctx,W,H);
+    drawOfflineBg(ctx, W, H);
   } else {
     ctx.fillStyle = "white";
     ctx.fillRect(0,0,W,H);
   }
 
-  // Draw heat layer on top using offscreen then composite
-  setStatus("Heatmap generálás...");
-  const heatLayer = document.createElement("canvas");
-  heatLayer.width = W; heatLayer.height = H;
-  const hctx = heatLayer.getContext("2d", { willReadFrequently:true });
+  // Load layers from same folder
+  let countries = null, rivers = null;
 
-  drawHeat(hctx, pts, W, H, rkm, mode);
+  try {
+    if ($("bordersOn").checked){
+      setStatus("Loading countries.geojson ...");
+      countries = await fetchJSON("./countries.geojson");
+    }
+  } catch(e) {
+    setStatus(`countries.geojson not loaded: ${e.message}`);
+  }
 
-  // Composite heat over background
-  ctx.save();
-  ctx.globalCompositeOperation = "source-over";
-  ctx.drawImage(heatLayer, 0, 0);
-  ctx.restore();
+  try {
+    if ($("watersOn").checked){
+      setStatus("Loading waters_merged.geojson ...");
+      rivers = await fetchJSON("./waters_merged.geojson"); // if you prefer waters.geojson: change this filename
+    }
+  } catch(e) {
+    setStatus(`waters_merged.geojson not loaded: ${e.message}`);
+  }
 
-  lastCanvas = cv;
-  document.getElementById("dl").disabled = false;
-  setStatus("Kész.");
+  // Draw waters under borders (optional)
+  if ($("watersOn").checked && rivers){
+    const col = $("watersColor").value;
+    const w = Number($("watersW").value);
+    const a = Number($("watersA").value);
+    const feats = normalizeGeoJSON(rivers);
+    setStatus(`Drawing waters: ${feats.length} features...`);
+    for (const ft of feats){
+      if (!ft.geometry) continue;
+      drawGeometry(ctx, W, H, ft.geometry, {
+        strokeStyle: hexToRgba(col,a),
+        lineWidth: w,
+        fillStyle: hexToRgba(col,a),
+        fillAlpha: Math.min(0.35, a),
+      });
+    }
+  }
+
+  if ($("bordersOn").checked && countries){
+    const col = $("bordersColor").value;
+    const w = Number($("bordersW").value);
+    const a = Number($("bordersA").value);
+    const feats = normalizeGeoJSON(countries);
+    setStatus(`Drawing borders: ${feats.length} features...`);
+    for (const ft of feats){
+      if (!ft.geometry) continue;
+      drawGeometry(ctx, W, H, ft.geometry, {
+        strokeStyle: hexToRgba(col,a),
+        lineWidth: w
+      });
+    }
+  }
+
+  // Load CRTK list
+  const crtkText = await loadCrtkText();
+  const pts = parseSTR(crtkText);
+  setStatus(`Bases in BBOX: ${pts.length}. Generating heatmap...`);
+
+  // Heat layer
+  const heat = drawHeatLayer(W, H, pts, rkm, mode);
+  ctx.drawImage(heat, 0, 0);
+
+  // Overlays
+  drawBaseLabels(ctx, W, H, pts);
+  drawLegend(ctx, W, H);
+
+  $("dl").disabled = false;
+  setStatus("Done.");
+}
+
+$("regen").addEventListener("click", async () => {
+  try { await regenerate(); }
+  catch(e){ setStatus(`Error: ${e.message}`); console.error(e); }
 });
 
-document.getElementById("dl").addEventListener("click", () => {
-  if (!lastCanvas) return;
+$("dl").addEventListener("click", () => {
   const a = document.createElement("a");
   a.download = "rtk_heatmap.png";
-  a.href = lastCanvas.toDataURL("image/png");
+  a.href = $("cv").toDataURL("image/png");
   a.click();
+});
+
+// Auto-generate on load
+window.addEventListener("load", async () => {
+  try { await regenerate(); }
+  catch(e){
+    setStatus(`Auto-generate failed: ${e.message}`);
+    console.error(e);
+  }
 });
 </script>
 </body>
