@@ -76,11 +76,15 @@
               <label>Magasság</label>
               <input id="h" type="number" value="3200" min="200" step="100"/>
             </div>
+            <div>
+              <label>PoligonMéret (km)</label>
+              <input id="hexkm" type="number" value="3" min="2" step="1"/>
+            </div>
           </div>
           <div class="small">Nagy méretnél (pl. 20000×10000) a böngésző/RAM lehet a limit.</div>
         </div>
 
-        <div class="card" style="padding:10px">
+        <div class="card" style="padding:10px;display: none;">
           <label>Hatótáv / heat</label>
           <div class="row">
             <div>
@@ -167,6 +171,9 @@
               <input id="labelDY" type="number" value="-6" step="1" style="width:100px"/>
             </div>
             <label>Legend title</label><input id="legendTitle" value="RTK Base density (20 km)" />
+            <label>Legend size</label>
+            <input id="legendScale" type="number" value="1.6" min="0.6" max="4" step="0.1">
+            <div class="small">1.0 = alap, 1.6–2.4 projektoros/nyomdás nézethez jó.</div>
           </div>
         </div>
       </div>
@@ -548,50 +555,57 @@ async function loadCrtkText(){
   }
 }
 
-function drawLegendFromThresholds(ctx, W, H, thresholds, title, pos="br"){
+function drawLegendFromThresholds(ctx, W, H, thresholds, title, pos="br", scale=1.0){
   if (!$("legendOn").checked) return;
 
-  const pad = 16;
-  const fs = 14;
-  const box = 14;
-  const gap = 8;
-  const lineH = Math.max(box, fs) + 6;
+  // base sizes (scaled)
+  const pad = Math.round(16 * scale);
+  const fs  = Math.round(14 * scale);
+  const box = Math.round(14 * scale);
+  const gap = Math.round(8  * scale);
+  const r   = Math.round(10 * scale);
 
-  // méret számítás
+  const lineH = Math.max(box, fs) + Math.round(6 * scale);
+
   ctx.save();
+  ctx.globalCompositeOperation = "source-over";
   ctx.font = `${fs}px sans-serif`;
-  const maxLabelW = Math.max(...thresholds.map(t => ctx.measureText(t.label || "").width));
+
+  // measure widths
+  const maxLabelW = Math.max(...thresholds.map(t => ctx.measureText(t.label || "").width), 0);
   const titleW = ctx.measureText(title || "").width;
+
   const panelW = Math.ceil(Math.max(titleW, box + gap + maxLabelW) + 2*pad);
-  const panelH = Math.ceil(pad + fs + 10 + thresholds.length*lineH + pad);
+  const panelH = Math.ceil(pad + fs + Math.round(10*scale) + thresholds.length*lineH + pad);
 
   let x = pad, y = pad;
   if (pos.includes("r")) x = W - panelW - pad;
   if (pos.includes("b")) y = H - panelH - pad;
 
-  // háttér panel
-  ctx.globalCompositeOperation = "source-over";
-  ctx.fillStyle = "rgba(255,255,255,0.78)";
+  // panel background
+  ctx.fillStyle = "rgba(255,255,255,0.80)";
   ctx.strokeStyle = "rgba(0,0,0,0.15)";
-  ctx.lineWidth = 1;
-  roundRect(ctx, x, y, panelW, panelH, 10);
+  ctx.lineWidth = Math.max(1, Math.round(1*scale));
+  roundRect(ctx, x, y, panelW, panelH, r);
   ctx.fill();
   ctx.stroke();
 
   // title
-  ctx.fillStyle = "rgba(0,0,0,0.65)";
+  ctx.fillStyle = "rgba(0,0,0,0.70)";
   ctx.textBaseline = "top";
   ctx.fillText(title || "", x + pad, y + pad);
 
   // items
-  let yy = y + pad + fs + 10;
+  let yy = y + pad + fs + Math.round(10*scale);
   for (const t of thresholds){
     ctx.fillStyle = t.color;
-    ctx.fillRect(x + pad, yy + 2, box, box);
-    ctx.strokeStyle = "rgba(0,0,0,0.15)";
-    ctx.strokeRect(x + pad, yy + 2, box, box);
+    ctx.fillRect(x + pad, yy + Math.round(2*scale), box, box);
 
-    ctx.fillStyle = "rgba(0,0,0,0.65)";
+    ctx.strokeStyle = "rgba(0,0,0,0.18)";
+    ctx.lineWidth = Math.max(1, Math.round(1*scale));
+    ctx.strokeRect(x + pad, yy + Math.round(2*scale), box, box);
+
+    ctx.fillStyle = "rgba(0,0,0,0.70)";
     ctx.fillText(t.label || "", x + pad + box + gap, yy);
     yy += lineH;
   }
@@ -654,6 +668,7 @@ function drawBaseLabels(ctx, W, H, pts){
 async function regenerate(){
   const W = Number($("w").value);
   const H = Number($("h").value);
+  const hexkm = Number($("hexkm").value);
   const rkm = Number($("rkm").value);
   const mode = $("mode").value;
   const bgMap = $("bgMap").checked;
@@ -732,17 +747,26 @@ async function regenerate(){
   const pts = parseSTR(crtkText);
   setStatus(`Bases in BBOX: ${pts.length}. Generating heatmap...`);
 
-  drawHexDistanceLayer(ctx, W, H, pts, /*hexKm=*/2, thresholds);
+  drawHexDistanceLayer(ctx, W, H, pts, /*hexKm=*/hexkm, thresholds);
   // Heat layer
   const heat = drawHeatLayer(W, H, pts, rkm, mode);
   ctx.drawImage(heat, 0, 0);
 
   // Overlays
   drawBaseLabels(ctx, W, H, pts);
-  drawLegendFromThresholds(ctx, W, H, thresholds, "Distance to nearest RTK base (km)", "br");
+
+  const legendScale = Number($("legendScale").value || 1.0);
+  drawLegendFromThresholds(
+    ctx, W, H,
+    thresholds,
+    "Distance to nearest RTK base (km)",
+    "br",
+    legendScale
+  );
 
   buildHexIndex(window.__hexR);
   window.__bases = pts; // hogy elérjük hoverben
+
 
   $("dl").disabled = false;
   setStatus("Done.");
