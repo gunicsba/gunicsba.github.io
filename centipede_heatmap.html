@@ -92,6 +92,7 @@
               <select id="mode">
                 <option value="gauss" selected>Gaussian (sima)</option>
                 <option value="hard">Hard cutoff (éles)</option>
+                <option value="none">Nincs</option>
               </select>
             </div>
           </div>
@@ -117,7 +118,7 @@
             </div>
             <div>
               <label>Vastagság</label>
-              <input id="bordersW" type="number" value="2" min="1" step="1"/>
+              <input id="bordersW" type="number" value="4" min="1" step="1"/>
             </div>
             <div>
               <label>Alpha</label>
@@ -137,7 +138,7 @@
             </div>
             <div>
               <label>Vastagság</label>
-              <input id="watersW" type="number" value="2" min="1" step="1"/>
+              <input id="watersW" type="number" value="5" min="1" step="1"/>
             </div>
             <div>
               <label>Alpha</label>
@@ -169,6 +170,15 @@
           </div>
         </div>
       </div>
+      <div id="tip" style="
+  position:fixed; left:0; top:0; display:none;
+  background:rgba(255,255,255,0.92);
+  border:1px solid rgba(0,0,0,0.15);
+  border-radius:10px; padding:10px;
+  font:12px system-ui; color:#111;
+  max-width:340px; pointer-events:none;
+"></div>
+
     </details>
   </div>
 </div>
@@ -176,6 +186,15 @@
 <script>
 /** BBOX: HU + N Serbia + RO overlap + ~100 km Slovakia buffer */
 const bbox = { minLon:16.0, maxLon:24.5, minLat:44.5, maxLat:49.8 };
+
+
+const thresholds = [
+  { max: 7,  color: "rgba(0, 120, 0, 0.45)", label: "0–7 km" }, // dark green
+  { max: 20, color: "rgba(0, 180, 0, 0.40)", label: "7–20 km" }, // green
+  { max: 35, color: "rgba(240, 200, 0, 0.40)", label: "20–35 km" }, // yellow
+  { max: 50, color: "rgba(255, 140, 0, 0.40)", label: "35–50 km" }, // orange
+  { max: Infinity, color: "rgba(200, 0, 0, 0.40)", label: ">50 km" } // red
+];
 
 function $(id){ return document.getElementById(id); }
 function setStatus(msg){ $("status").textContent = msg; }
@@ -276,16 +295,18 @@ function drawHeatLayer(W,H,pts,radiusKm,mode){
       g.addColorStop(0.0, "rgba(0,255,0,0.20)");
       g.addColorStop(0.999, "rgba(0,255,0,0.20)");
       g.addColorStop(1.0, "rgba(0,255,0,0.0)");
-    } else {
+    } else if (mode === "soft") {
       g.addColorStop(0.0, "rgba(0,255,0,0.22)");
       g.addColorStop(0.35,"rgba(0,255,0,0.12)");
       g.addColorStop(0.70,"rgba(0,255,0,0.05)");
       g.addColorStop(1.0, "rgba(0,255,0,0.0)");
     }
-    octx.fillStyle = g;
-    octx.beginPath();
-    octx.arc(x,y,r,0,Math.PI*2);
-    octx.fill();
+    if( mode != "none") {
+      octx.fillStyle = g;
+      octx.beginPath();
+      octx.arc(x,y,r,0,Math.PI*2);
+      octx.fill();
+    }
 
     if (i % 80 === 0) setStatus(`Heat splat: ${i}/${pts.length}`);
   }
@@ -310,6 +331,130 @@ function drawHeatLayer(W,H,pts,radiusKm,mode){
   octx.putImageData(img,0,0);
   return off;
 }
+
+function haversineKm(lat1, lon1, lat2, lon2){
+  const R = 6371.0;
+  const toRad = d => d * Math.PI/180;
+  const dLat = toRad(lat2-lat1);
+  const dLon = toRad(lon2-lon1);
+  const a =
+    Math.sin(dLat/2)**2 +
+    Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+
+let hexCache = []; // [{cx,cy, lat,lon, dNearest, bandIndex}...]
+
+function drawHexDistanceLayer(ctx, W, H, bases, hexKm, thresholds){
+  hexCache = [];
+
+  const k = kmPerPx(W,H);
+  const kmPerPxMean = Math.sqrt(k.x * k.y);
+  const hexR = Math.max(2, hexKm / kmPerPxMean);
+
+  const dx = hexR * 1.5;
+  const dy = hexR * Math.sqrt(3);
+
+  const blats = bases.map(b=>b.lat);
+  const blons = bases.map(b=>b.lon);
+
+  function bandIndexFor(d){
+    for (let i=0;i<thresholds.length;i++){
+      if (d <= thresholds[i].max) return i;
+    }
+    return thresholds.length-1;
+  }
+
+  function colorForBand(i){ return thresholds[i].color; }
+
+  for (let row=0, y=hexR; y < H+hexR; y += dy, row++){
+    const xOffset = (row % 2) ? dx/2 : 0;
+    for (let x=hexR + xOffset; x < W+hexR; x += dx){
+
+      const lon = bbox.minLon + (x / (W - 1)) * (bbox.maxLon - bbox.minLon);
+      const lat = bbox.maxLat - (y / (H - 1)) * (bbox.maxLat - bbox.minLat);
+
+      let best = Infinity;
+      for (let i=0;i<blats.length;i++){
+        const d = haversineKm(lat, lon, blats[i], blons[i]);
+        if (d < best) best = d;
+      }
+
+      const bi = bandIndexFor(best);
+      ctx.fillStyle = colorForBand(bi);
+
+      // draw hex
+      ctx.beginPath();
+      for (let i=0;i<6;i++){
+        const a = (Math.PI/180) * (60*i - 30);
+        const px = x + hexR * Math.cos(a);
+        const py = y + hexR * Math.sin(a);
+        if (i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+      }
+      ctx.closePath();
+      ctx.fill();
+
+      hexCache.push({ cx:x, cy:y, lat, lon, dNearest:best, bandIndex:bi, r:pxToNum(hexR) });
+    }
+  }
+
+  // store radius for picking
+  window.__hexR = hexR;
+}
+
+function pxToNum(v){ return Number(v); }
+
+
+let hexIndex = new Map(); // key = "gx:gy" -> [hexIds...]
+
+function buildHexIndex(hexR){
+  hexIndex = new Map();
+  const cell = hexR * 2.0;
+
+  for (let i=0;i<hexCache.length;i++){
+    const h = hexCache[i];
+    const gx = Math.floor(h.cx / cell);
+    const gy = Math.floor(h.cy / cell);
+    const key = `${gx}:${gy}`;
+    if (!hexIndex.has(key)) hexIndex.set(key, []);
+    hexIndex.get(key).push(i);
+  }
+  window.__hexCell = cell;
+}
+
+function pickHex(mx, my){
+  const cell = window.__hexCell || (window.__hexR*2);
+  const gx = Math.floor(mx / cell);
+  const gy = Math.floor(my / cell);
+
+  let bestId = -1;
+  let bestD2 = Infinity;
+
+  for (let yy=gy-1; yy<=gy+1; yy++){
+    for (let xx=gx-1; xx<=gx+1; xx++){
+      const key = `${xx}:${yy}`;
+      const ids = hexIndex.get(key);
+      if (!ids) continue;
+      for (const id of ids){
+        const h = hexCache[id];
+        const dx = mx - h.cx;
+        const dy = my - h.cy;
+        const d2 = dx*dx + dy*dy;
+        if (d2 < bestD2){
+          bestD2 = d2;
+          bestId = id;
+        }
+      }
+    }
+  }
+
+  // opcionálisan: ha túl messze van a középponttól, nincs találat
+  const maxR = window.__hexR * 1.2;
+  if (bestId >= 0 && bestD2 <= maxR*maxR) return bestId;
+  return -1;
+}
+
+
 
 /** GeoJSON drawing */
 function normalizeGeoJSON(gj){
@@ -403,39 +548,65 @@ async function loadCrtkText(){
   }
 }
 
-function drawLegend(ctx, W, H){
+function drawLegendFromThresholds(ctx, W, H, thresholds, title, pos="br"){
   if (!$("legendOn").checked) return;
-  const title = $("legendTitle").value || "";
-  const lw = 320, lh = 18, fs = 16;
-  const pad = 18;
-  const x = W - pad - lw;
-  const y = H - pad - lh - fs - 14;
 
+  const pad = 16;
+  const fs = 14;
+  const box = 14;
+  const gap = 8;
+  const lineH = Math.max(box, fs) + 6;
+
+  // méret számítás
   ctx.save();
-  ctx.globalCompositeOperation = "source-over";
-  ctx.fillStyle = "rgba(0,0,0,0.55)";
   ctx.font = `${fs}px sans-serif`;
-  ctx.textBaseline = "bottom";
-  ctx.fillText(title, x, y + fs);
+  const maxLabelW = Math.max(...thresholds.map(t => ctx.measureText(t.label || "").width));
+  const titleW = ctx.measureText(title || "").width;
+  const panelW = Math.ceil(Math.max(titleW, box + gap + maxLabelW) + 2*pad);
+  const panelH = Math.ceil(pad + fs + 10 + thresholds.length*lineH + pad);
 
-  const barY = y + fs + 6;
-  const g = ctx.createLinearGradient(x, barY, x+lw, barY);
-  g.addColorStop(0.0, "rgba(0,90,0,0.35)");
-  g.addColorStop(1.0, "rgba(0,255,0,1.0)");
-  ctx.fillStyle = g;
-  ctx.fillRect(x, barY, lw, lh);
+  let x = pad, y = pad;
+  if (pos.includes("r")) x = W - panelW - pad;
+  if (pos.includes("b")) y = H - panelH - pad;
 
+  // háttér panel
+  ctx.globalCompositeOperation = "source-over";
+  ctx.fillStyle = "rgba(255,255,255,0.78)";
   ctx.strokeStyle = "rgba(0,0,0,0.15)";
   ctx.lineWidth = 1;
-  ctx.strokeRect(x, barY, lw, lh);
+  roundRect(ctx, x, y, panelW, panelH, 10);
+  ctx.fill();
+  ctx.stroke();
 
-  ctx.fillStyle = "rgba(0,0,0,0.55)";
-  ctx.font = `13px sans-serif`;
+  // title
+  ctx.fillStyle = "rgba(0,0,0,0.65)";
   ctx.textBaseline = "top";
-  ctx.fillText("low", x, barY + lh + 4);
-  const tW = ctx.measureText("high").width;
-  ctx.fillText("high", x+lw-tW, barY + lh + 4);
+  ctx.fillText(title || "", x + pad, y + pad);
+
+  // items
+  let yy = y + pad + fs + 10;
+  for (const t of thresholds){
+    ctx.fillStyle = t.color;
+    ctx.fillRect(x + pad, yy + 2, box, box);
+    ctx.strokeStyle = "rgba(0,0,0,0.15)";
+    ctx.strokeRect(x + pad, yy + 2, box, box);
+
+    ctx.fillStyle = "rgba(0,0,0,0.65)";
+    ctx.fillText(t.label || "", x + pad + box + gap, yy);
+    yy += lineH;
+  }
+
   ctx.restore();
+}
+
+function roundRect(ctx, x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.arcTo(x+w, y, x+w, y+h, r);
+  ctx.arcTo(x+w, y+h, x, y+h, r);
+  ctx.arcTo(x, y+h, x, y, r);
+  ctx.arcTo(x, y, x+w, y, r);
+  ctx.closePath();
 }
 
 function drawBaseLabels(ctx, W, H, pts){
@@ -561,17 +732,63 @@ async function regenerate(){
   const pts = parseSTR(crtkText);
   setStatus(`Bases in BBOX: ${pts.length}. Generating heatmap...`);
 
+  drawHexDistanceLayer(ctx, W, H, pts, /*hexKm=*/2, thresholds);
   // Heat layer
   const heat = drawHeatLayer(W, H, pts, rkm, mode);
   ctx.drawImage(heat, 0, 0);
 
   // Overlays
   drawBaseLabels(ctx, W, H, pts);
-  drawLegend(ctx, W, H);
+  drawLegendFromThresholds(ctx, W, H, thresholds, "Distance to nearest RTK base (km)", "br");
+
+  buildHexIndex(window.__hexR);
+  window.__bases = pts; // hogy elérjük hoverben
 
   $("dl").disabled = false;
   setStatus("Done.");
 }
+
+const tip = document.getElementById("tip");
+let lastHexId = -1;
+
+function topKNearest(lat, lon, bases, k=5){
+  const arr = bases.map(b => ({
+    name: b.name,
+    country: b.country,
+    d: haversineKm(lat, lon, b.lat, b.lon)
+  }));
+  arr.sort((a,b)=>a.d-b.d);
+  return arr.slice(0,k);
+}
+
+function showTip(e, hexId, bases){
+  const h = hexCache[hexId];
+  const top5 = topKNearest(h.lat, h.lon, bases, 5);
+
+  const lines = top5.map(x =>
+    `${x.d.toFixed(1)} km — ${escapeHtml(x.name)}${x.country ? " ("+escapeHtml(x.country)+")" : ""}`
+  ).join("<br/>");
+
+  tip.innerHTML = `
+    <div style="font-weight:600;margin-bottom:6px">Nearest bases</div>
+    <div class="mono" style="margin-bottom:6px">lat ${h.lat.toFixed(5)}, lon ${h.lon.toFixed(5)}</div>
+    <div style="margin-bottom:6px">NEAR <b>${h.dNearest.toFixed(1)} km</b></div>
+    <div>${lines}</div>
+  `;
+  tip.style.left = (e.clientX + 14) + "px";
+  tip.style.top  = (e.clientY + 14) + "px";
+  tip.style.display = "block";
+}
+
+function hideTip(){
+  tip.style.display = "none";
+  lastHexId = -1;
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
 
 $("regen").addEventListener("click", async () => {
   try { await regenerate(); }
@@ -584,6 +801,27 @@ $("dl").addEventListener("click", () => {
   a.href = $("cv").toDataURL("image/png");
   a.click();
 });
+
+const cv = document.getElementById("cv");
+cv.addEventListener("mousemove", (e) => {
+  if (!window.__bases || !hexCache.length) return;
+
+  const r = cv.getBoundingClientRect();
+  const mx = (e.clientX - r.left) * (cv.width / r.width);
+  const my = (e.clientY - r.top)  * (cv.height / r.height);
+
+  const id = pickHex(mx, my);
+  if (id < 0) { hideTip(); return; }
+  if (id === lastHexId) { // csak mozgatjuk
+    tip.style.left = (e.clientX + 14) + "px";
+    tip.style.top  = (e.clientY + 14) + "px";
+    return;
+  }
+  lastHexId = id;
+  showTip(e, id, window.__bases);
+});
+
+cv.addEventListener("mouseleave", hideTip);
 
 // Auto-generate on load
 window.addEventListener("load", async () => {
