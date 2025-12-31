@@ -42,3 +42,52 @@ h2{margin:26px 4px 12px;font-size:clamp(18px,2.2vw,22px)}
 .links a{color:var(--muted);text-decoration:none}
 .links a:hover{color:var(--text)}
 .tag{position:absolute;top:10px;right:10px;font-size:11px;padding:4px 8px;border-radius:999px;background:rgba(96,165,250,.15);color:#bfdbfe;border:1px solid rgba(96,165,250,.35)}
+
+/* ===== Compact link cards ===== */
+
+.card.compact {
+  padding: 10px 12px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.card.compact .kicker {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.75;
+  margin-bottom: 2px;
+}
+
+.card.compact .name {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.card.compact p {
+  font-size: 13px;
+  line-height: 1.35;
+  margin: 0;
+  opacity: 0.85;
+}
+
+.card.compact a {
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--accent, #6aa9ff);
+}
+
+.card.compact a:hover {
+  text-decoration: underline;
+}
+
+/* sűrűbb grid kisebb kijelzőn */
+@media (max-width: 900px) {
+  #grid-agopen-links {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+}
