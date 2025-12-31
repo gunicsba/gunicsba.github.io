@@ -26,7 +26,7 @@
       </label>
     </div>
 
-    <section>
+    <section id="agopen-start" class="section-anchor">
       <h2>AgOpenGPS</h2>
       <div class="grid" id="grid-misc">
         <article class="card" data-tags="agopen agopengps getting started" data-title="AgOpenGPS gépbeállítás pár lépésben">
@@ -62,7 +62,7 @@
       </div>
     </section>
 
-    <section>
+    <section id="converters" class="section-anchor">
       <h2>Konverterek</h2>
       <div class="grid" id="grid-conv">
         <article class="card" data-tags="kml shp eov converter allfields" data-title="KML → Shape (EOV)">
@@ -133,7 +133,7 @@
       </div>
     </section>
 
-    <section>
+    <section id="rtkbase" class="section-anchor">
       <h2>RTK / Bázis dolgai</h2>
       <div class="grid" id="grid-rtk">
         <article class="card" data-tags="rtk crtk centipede" data-title="RTK bázisok térképen">
@@ -167,7 +167,7 @@
       </div>
     </section>
 
-    <section>
+    <section id="agopen-links" class="section-anchor">
       <h2>AgOpenGPS – Tudásbázis & eszközök</h2>
 
       <div class="grid" id="grid-agopen-links">
@@ -239,7 +239,7 @@
       </div>
     </section>
 
-    <section>
+    <section id="pictures" class="section-anchor">
       <h2>Fotódokumentációk</h2>
 
       <div class="grid" id="grid-photos">
@@ -295,7 +295,7 @@
       </div>
     </section>
 
-    <section>
+    <section id="other" class="section-anchor">
       <h2>Egyebek</h2>
       <div class="grid" id="grid-misc">
         <article class="card" data-tags="isoxml third-party converter new holland" data-title="FieldOps (külső)">
@@ -334,5 +334,19 @@
     }
     q.addEventListener('input', filter);
   </script>
+
+  <script>
+  document.querySelectorAll('.anchor-link').forEach(link => {
+    link.addEventListener('click', e => {
+      e.preventDefault();
+      const url = window.location.origin + window.location.pathname + link.getAttribute('href');
+      navigator.clipboard.writeText(url);
+
+      link.textContent = '✓';
+      setTimeout(() => link.textContent = '#', 900);
+    });
+  });
+  </script>
+
 </body>
 </html>

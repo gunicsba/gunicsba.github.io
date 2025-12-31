@@ -98,3 +98,32 @@ h2{margin:26px 4px 12px;font-size:clamp(18px,2.2vw,22px)}
     font-size: 11.5px;
   }
 }
+
+
+/* ===== Section anchor links ===== */
+
+.section-anchor {
+  scroll-margin-top: 80px; /* sticky header esetén */
+}
+
+.section-anchor h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.anchor-link {
+  opacity: 0;
+  font-size: 0.85em;
+  text-decoration: none;
+  color: var(--accent, #6aa9ff);
+  transition: opacity 0.15s ease;
+}
+
+.section-anchor:hover .anchor-link {
+  opacity: 1;
+}
+
+.anchor-link:hover {
+  text-decoration: underline;
+}
