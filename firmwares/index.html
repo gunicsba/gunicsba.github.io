@@ -1,0 +1,386 @@
+<section id="firmwares" class="fw-section section-anchor">
+  <h2>
+    Firmwares
+    <a class="anchor-link" href="#firmwares" title="Copy link">#</a>
+  </h2>
+  <p class="fw-lead">
+    Curated firmware builds. TM171 variants are prioritized. Newer/primary builds are listed first; legacy builds are at the bottom.
+  </p>
+
+  <div class="fw-grid">
+
+    <!-- ===================== AIO (FIRST) ===================== -->
+    <div id="aio" class="fw-group">
+      <div class="fw-group-head">
+        <h3>
+          AIO (Teensy 4.1) – TM171 focus
+          <a class="anchor-link" href="#aio" title="Copy link">#</a>
+        </h3>
+        <div class="fw-meta">Primary target: AIO boards</div>
+      </div>
+
+      <div class="fw-row">
+        <div class="fw-left">
+          <a href="/firmwares/AIO_TM171.jpg" target="_blank" rel="noopener" class="fw-img-link" title="Open image">
+            <img src="/firmwares/AIO_TM171.jpg" alt="AIO TM171 PCB" class="fw-img" />
+          </a>
+
+          <div class="fw-tools">
+            <div class="fw-tool-title">Tools</div>
+            <ul class="fw-list tight">
+              <li>
+                <a href="/firmwares/teensyLoader.exe">Teensy Loader (teensyLoader.exe)</a>
+                <span class="badge">load HEX here</span>
+              </li>
+              <li><a href="/firmwares/teensy_reboot.exe">Teensy reboot helper (teensy_reboot.exe)</a></li>
+            </ul>
+          </div>
+
+          <div class="fw-tools">
+            <div class="fw-tool-title">Sources</div>
+            <ul class="fw-list tight">
+              <li>
+                <span class="label">Hydraulic TM171 branch:</span>
+                <a href="https://github.com/gunicsba/AgOpenGPS_Boards/tree/hydliftv2_TM171" target="_blank" rel="noopener">
+                  gunicsba/AgOpenGPS_Boards (hydliftv2_TM171)
+                </a>
+              </li>
+              <li>
+                <span class="label">Keya TM171 branch:</span>
+                <a href="https://github.com/gunicsba/AgOpenGPS_Boards/tree/Keya_TM171" target="_blank" rel="noopener">
+                  gunicsba/AgOpenGPS_Boards (Keya_TM171)
+                </a>
+              </li>
+            </ul>
+          </div>
+        </div>
+<!-- ===================== Firmwares ===================== -->
+        <div class="fw-right">
+          <div class="fw-block">
+            <div class="fw-block-title">Recommended (TM171)</div>
+            <ul class="fw-list">
+              <li>
+                <a href="/firmwares/AOG-Keya-CANBUS_lazykickoff95_TM171.ino.hex">
+                  AOG Keya CANBUS – lazykickoff95 – TM171
+                </a>
+                <span class="badge primary">TM171</span>
+              </li>
+              <li>
+                <a href="/firmwares/Autosteer_gps_teensy_v4_1.ino_tm171_serial7_hydraulic.ino.hex">
+                  Autosteer GPS Teensy v4.1 – TM171 serial7 – Hydraulic/DC/Danfoss
+                </a>
+                <span class="badge primary">TM171</span>
+                <span class="badge">serial7</span>
+                <span class="hint">Hydraulic/DC motors + encoder pulse auto-reset tweak</span>
+              </li>
+              <li>
+                <a href="/firmwares/Autosteer_gps_teensy_v4_1.ino_tm171_serial7_JD_FEMA.ino.hex">
+                  Autosteer GPS Teensy v4.1 – TM171 serial7 – JD Fema PWM encoder
+                </a>
+                <span class="badge primary">TM171</span>
+              </li>
+
+            </ul>
+          </div>
+
+          <div class="fw-block">
+            <ul class="fw-list">
+              <details class="fw-block inline-details">
+                <summary class="fw-block-title small">Other builds</summary>
+                <ul class="fw-list">
+                  <li>
+                    <a href="/firmwares/AOG-Keya-CANBUS_lazykickoff95.hex">
+                      AOG Keya CANBUS – lazykickoff95 (legacy)
+                    </a>
+                    <span class="badge">legacy</span>
+                  </li>
+              <li>
+                <a href="/firmwares/AOG_Teensy_UM982_DUAL_by_ChrisK.ino.hex">
+                  AOG Teensy UM982 DUAL (by ChrisK)
+                </a>
+                <span class="badge">GNSS</span>
+                <span class="hint">UM982 dual receiver config for AIO boards</span>
+              </li>
+                  <li>
+                    <a href="/firmwares/AOG-Keya-CANBUS_lazykickoff95_RVC.hex">
+                      AOG Keya CANBUS – lazykickoff95 – RVC
+                    </a>
+                    <span class="badge">RVC</span>
+                  </li>
+                  <li>
+                    <a href="/firmwares/KeyaDemo.ino.hex">KeyaDemo</a>
+                    <span class="badge">demo</span>
+                  </li>
+                </ul>
+              </details>
+            </ul>
+          </div>
+
+          <details class="fw-block">
+            <summary class="fw-block-title">Config / notes</summary>
+            <ul class="fw-list tight">
+              <li><a href="/firmwares/TM171_config.jpg">TM171_config.jpg</a></li>
+              <li><a href="/firmwares/readme.md">readme.md</a></li>
+            </ul>
+          </details>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== 3xCAN (SECOND) ===================== -->
+    <div id="three-x-can" class="fw-group">
+      <div class="fw-group-head">
+        <h3>
+          3xCAN (Tony board) – SteerReadyCAN
+          <a class="anchor-link" href="#three-x-can" title="Copy link">#</a>
+        </h3>
+        <div class="fw-meta">Target: Tony’s 3xCAN Teensy board (SteerReadyCAN variants)</div>
+      </div>
+
+      <div class="fw-row">
+        <div class="fw-left">
+          <a href="/firmwares/3xCAN.jpg" target="_blank" rel="noopener" class="fw-img-link" title="Open image">
+            <img src="/firmwares/3xCAN.jpg" alt="3xCAN PCB" class="fw-img" />
+          </a>
+
+          <div class="fw-tools">
+            <div class="fw-tool-title">Source</div>
+            <ul class="fw-list tight">
+              <li>
+                <a href="https://github.com/gunicsba/AOG_CAN_Teensy4.1/commits/deutz/" target="_blank" rel="noopener">
+                  gunicsba/AOG_CAN_Teensy4.1 (deutz)
+                </a>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="fw-right">
+          <div class="fw-block">
+            <div class="fw-block-title">Recommended (TM171)</div>
+            <ul class="fw-list">
+              <li>
+                <a href="/firmwares/Autosteer_AOGv5_Teensy4.1UDP_SteerReadyCAN_TM171_29.11.2025.ino.hex">
+                  Autosteer AOGv5 Teensy4.1 UDP – SteerReadyCAN – TM171 (29.11.2025)
+                </a>
+                <span class="badge primary">TM171</span>
+                <span class="badge">newer</span>
+                <span class="hint">Updated CAN firmware for CLAAS</span>
+              </li>
+              <li>
+                <a href="/firmwares/Autosteer_AOGv5_Teensy4.1UDP_SteerReadyCAN_TM171.ino.hex">
+                  Autosteer AOGv5 Teensy4.1 UDP – SteerReadyCAN – TM171
+                </a>
+                <span class="badge primary">TM171</span>
+                <span class="hint">Baseline TM171 build</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== RATE CONTROL (THIRD) ===================== -->
+    <div id="rate-control" class="fw-group">
+      <div class="fw-group-head">
+        <h3>
+          Rate Control (ESP32)
+          <a class="anchor-link" href="#rate-control" title="Copy link">#</a>
+        </h3>
+        <div class="fw-meta">Firmware + app/config references (David Rate Controller compatible)</div>
+      </div>
+
+      <div class="fw-row">
+        <div class="fw-left">
+          <a href="/firmwares/ESPRC.jpg" target="_blank" rel="noopener" class="fw-img-link" title="Open image">
+            <img src="/firmwares/ESPRC.jpg" alt="ESP32 Rate Control PCB" class="fw-img" />
+          </a>
+
+          <div class="fw-tools">
+            <div class="fw-tool-title">Source (2025 refactor)</div>
+            <ul class="fw-list tight">
+              <li>
+                <a href="https://github.com/gunicsba/AOG_RC/blob/ESP32RC_refactor25/Modules/ESP32%20Rate/" target="_blank" rel="noopener">
+                  gunicsba/AOG_RC (ESP32RC_refactor25 / ESP32 Rate)
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          <div class="fw-tools">
+            <div class="fw-tool-title">Software</div>
+            <ul class="fw-list tight">
+              <li>
+                <a href="https://github.com/SK21/AOG_RC/releases/tag/4.1.5" target="_blank" rel="noopener">
+                  David Rate Controller App (release 4.1.5)
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          <div class="fw-tools">
+            <div class="fw-tool-title">Section Controller variant</div>
+            <ul class="fw-list tight">
+              <li>
+                <a href="https://github.com/gunicsba/AOG_RC/tree/MachineBoard/Modules/ESP32_Section" target="_blank" rel="noopener">
+                  gunicsba/AOG_RC (MachineBoard / ESP32_Section)
+                </a>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="fw-right">
+          <div class="fw-block">
+            <div class="fw-block-title">Recommended (end of 2025)</div>
+            <ul class="fw-list">
+              <li>
+                <a href="/firmwares/RC_ESP32_2025version.ino.bin">
+                  RC ESP32 – 2025 version (.bin)
+                </a>
+                <span class="badge">ESP32</span>
+                <span class="badge">recommended</span>
+                <span class="hint">Compatible with David Rate Controller</span>
+              </li>
+              <li>
+                <a href="/firmwares/RC_ESP32_2025version_AgOpenShop.rcs">
+                  RC ESP32 – 2025 config (AgOpenShop) (.rcs)
+                </a>
+                <span class="badge">config</span>
+                <span class="hint">Firmware companion settings file</span>
+              </li>
+            </ul>
+          </div>
+
+          <details class="fw-block">
+            <summary class="fw-block-title">Legacy (older Rate Control)</summary>
+            <ul class="fw-list">
+              <li>
+                <a href="/firmwares/RC_ESP32_9threlayasF2.ino.bin">
+                  RC ESP32 – 9th relay as F2 (.bin)
+                </a>
+                <span class="badge">ESP32</span>
+                <span class="badge">legacy</span>
+              </li>
+              <li>
+                <span class="label">Legacy source:</span>
+                <a href="https://github.com/gunicsba/AOG_RC/blob/ESP32RC_refactor/Modules/ESP32%20Rate/" target="_blank" rel="noopener">
+                  gunicsba/AOG_RC (ESP32RC_refactor / ESP32 Rate)
+                </a>
+              </li>
+              <li>
+                <span class="label">Legacy app:</span>
+                <a href="https://github.com/gunicsba/AOG_RC/blob/ESP32RC_refactor/RateControllerApp.zip" target="_blank" rel="noopener">
+                  RateControllerApp.zip
+                </a>
+              </li>
+            </ul>
+          </details>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<style>
+  /* ===== Anchor links (section copy/link) ===== */
+  .section-anchor { scroll-margin-top: 80px; }
+  .section-anchor h2, .fw-group-head h3 {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .anchor-link {
+    opacity: 0;
+    font-size: 0.85em;
+    text-decoration: none;
+    color: var(--accent, #6aa9ff);
+    transition: opacity 0.15s ease;
+  }
+  .section-anchor:hover .anchor-link,
+  .fw-group-head:hover .anchor-link { opacity: 1; }
+
+  /* ===== Firmware layout ===== */
+  .fw-section .fw-lead { margin-top: 6px; opacity: 0.8; max-width: 980px; }
+  .fw-grid { display: grid; gap: 14px; }
+  .fw-group { border: 1px solid rgba(255,255,255,.08); border-radius: 12px; overflow: hidden; }
+  .fw-group-head { padding: 10px 12px; background: rgba(255,255,255,.03); }
+  .fw-group-head h3 { margin: 0; font-size: 16px; }
+  .fw-meta { margin-top: 4px; font-size: 12.5px; opacity: 0.75; }
+
+  .fw-row {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .fw-left { display: grid; gap: 10px; align-content: start; }
+  .fw-img-link { display:block; }
+  .fw-img {
+    width: 100%;
+    max-width: 220px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,.10);
+    display: block;
+  }
+
+  .fw-tools { border: 1px solid rgba(255,255,255,.08); border-radius: 10px; padding: 10px; }
+  .fw-tool-title { font-size: 12px; font-weight: 700; opacity: .8; margin-bottom: 6px; }
+
+  .fw-right { display: grid; gap: 10px; }
+  .fw-block { border: 1px solid rgba(255,255,255,.08); border-radius: 10px; padding: 10px; }
+  .fw-block-title { font-size: 13px; font-weight: 700; opacity: .85; margin: 0 0 8px; }
+
+  .fw-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+  .fw-list.tight { gap: 6px; }
+  .fw-list li { line-height: 1.35; }
+  .fw-list a { text-decoration: none; }
+  .fw-list a:hover { text-decoration: underline; }
+
+  .label { font-weight: 700; opacity: .75; margin-right: 6px; }
+  .hint { display: inline-block; margin-left: 8px; font-size: 12px; opacity: .75; }
+
+  .badge {
+    display: inline-block;
+    margin-left: 8px;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,.12);
+    opacity: .85;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+  .badge.primary { border-color: rgba(106,169,255,.6); }
+
+  details.fw-block > summary {
+    cursor: pointer;
+    list-style: none;
+  }
+  details.fw-block > summary::-webkit-details-marker { display:none; }
+
+  /* inline details (for the Keya legacy list) */
+  details.inline-details { padding: 0; border: none; }
+  details.inline-details > summary { padding: 0; margin: 8px 0 6px; }
+  details.inline-details .fw-list { margin-left: 0; }
+
+  @media (max-width: 900px) {
+    .fw-row { grid-template-columns: 1fr; }
+    .fw-img { max-width: 320px; }
+  }
+</style>
+
+<script>
+  // Click on "#" copies full URL to clipboard + updates hash
+  document.querySelectorAll('.anchor-link').forEach(link => {
+    link.addEventListener('click', e => {
+      e.preventDefault();
+      const hash = link.getAttribute('href');
+      const url = window.location.origin + window.location.pathname + hash;
+      if (navigator.clipboard) navigator.clipboard.writeText(url);
+      history.replaceState(null, "", hash);
+      link.textContent = "✓";
+      setTimeout(() => link.textContent = "#", 900);
+    });
+  });
+</script>
