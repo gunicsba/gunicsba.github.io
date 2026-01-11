@@ -270,13 +270,53 @@ function szamolfold(j) {
   }
 }
 
-function szamolfoldBulk1() {
+function szamolfoldBulk2() {
   console.log("SZamolFoldBulk1() ")
   for(var i = 0; i < 90000; i++){
     if(document.getElementById('eov_'+i) != null)
       szamolfoldBulk(i);
   }
 }
+
+async function szamolfoldBulk1() {
+  console.log("SZamolFoldBulk1() with throttling");
+
+  // meglévő eov_ indexek összegyűjtése
+  const indices = [];
+  let i = 0;
+  while (true) {
+    if (document.getElementById('eov_' + i) == null) break;
+    indices.push(i);
+    i++;
+  }
+
+  console.log("Found " + indices.length + " parcels to process");
+
+  const concurrency = 5; // egyszerre max 5 kérés fusson
+  let current = 0;
+
+  async function worker() {
+    while (true) {
+      const idx = current++;
+      if (idx >= indices.length) break;
+      const j = indices[idx];
+      console.log("Worker processing entry", j);
+      await szamolfoldBulk(j);
+      // kis pihenő: await sleep(50ms)
+      //await new Promise(r => setTimeout(r, 50));
+	  // még mitnem...
+    }
+  }
+
+  const workers = [];
+  for (let w = 0; w < concurrency; w++) {
+    workers.push(worker());
+  }
+
+  await Promise.all(workers);
+  console.log("All entries processed");
+}
+
 
 function szamolfoldBulk(j) {
   console.log("Calculating for entry: " + j + "  " + document.getElementById('eov_'+j).value);
@@ -302,7 +342,7 @@ function szamolfoldBulk(j) {
 //      document.getElementById('WGS84OUT'+j).value+=(i+1)+' \n';
     }
   }
-  transformDataBulk(j, jsonArray);
+  return transformDataBulk(j, jsonArray);
 }
 
 function transformDataBulk(i, data){
@@ -314,7 +354,7 @@ function transformDataBulk(i, data){
     --data-raw '[{"pointNumber":"1","y":722440.365 , "x": 184418.844,"h":57.460,"remark":""}]'
   */
   console.log(data);
-  fetch('https://eht2.gnssnet.hu/api/transformation/eov-to-etrs89', 
+  return fetch('https://eht2.gnssnet.hu/api/transformation/eov-to-etrs89', 
     {method: "POST", headers: { "Content-Type": "application/json"},body: JSON.stringify(data)})
   .then(response => {
     if (!response.ok) {
