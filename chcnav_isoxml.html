@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shapefile NAVLine → ISOXML (GGP/GPN/LSG)</title>
+  <script src="https://unpkg.com/jszip/dist/jszip.min.js"></script>
+  <script src="https://unpkg.com/shpjs/dist/shp.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    h1, h3 {
+      color: #333;
+      text-align: center;
+    }
+    .container {
+      max-width: 900px;
+      margin: auto;
+      padding: 10px;
+    }
+    textarea, input[type="file"], button {
+      padding: 8px;
+      margin-bottom: 10px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    textarea {
+      resize: vertical;
+      background-color: #d4e6f1;
+      font-family: monospace;
+      font-size: 12px;
+    }
+    button {
+      background-color: #5499c7;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #7fa92a;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 10px;
+      margin-bottom: 10px;
+      font-size: 0.9rem;
+    }
+    table, th, td {
+      border: 1px solid #ccc;
+    }
+    th, td {
+      padding: 4px 6px;
+      text-align: left;
+    }
+    .small-textarea {
+      height: 220px;
+    }
+    .options-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin: 10px 0 15px 0;
+      font-size: 0.9rem;
+    }
+    .options-row label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .options-row input[type="checkbox"] {
+      width: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>Shapefile NAVLine → ISOXML (GuidanceGroup, opcionális boundary)</h1>
+  <div class="container">
+    <p>
+      Exportáljuk a CHCNAV-ban Farmok-at. Ez az SD kártya CHCNAV mappában lesz benne, azokat tömörítsük be egy zip fájlba.
+    </p>
+    <p>
+      Válassz ki egy ZIP fájlt, amely <strong>WGS84 (lat/lon)</strong> koordinátarendszerű,
+      vonalas shapefile-okat (LineString / MultiLineString) tartalmaz (pl. mappánként
+      <code>DefaultField/NavLine.shp</code> + <code>.dbf</code>).
+    </p>
+    <p>
+      A program az összes shapefile-ból egy <code>TASKDATA.XML</code>-t készít:
+    </p>
+    <ul>
+      <li>Minden shapefile → 1 <code>PFD</code> (Partfield, D="0")</li>
+      <li>Minden vonal → 1 <code>GGP</code> (GuidanceGroup) a PFD alatt</li>
+      <li>Minden <code>GGP</code>-ben 1 <code>GPN</code> (GuidancePattern) + 1 <code>LSG</code></li>
+      <li><code>GPN.B</code> = vonal neve (NAMEC/Name), <code>GPN.C</code>: "1" = AB, "3" = görbe</li>
+      <li><code>LSG A="5"</code>, hogy az AOG kód <code>LSG[@A='5']</code>-re megtalálja</li>
+      <li><code>PNT C=lat</code>, <code>D=lon</code> WGS84 fokban</li>
+    </ul>
+
+    <div class="options-row">
+      <label title="6.7-es FormFieldISOXML csak akkor enged fieldet létrehozni, ha van PLN A=1 boundary.">
+        <input type="checkbox" id="optBoundary" checked />
+        Külső határ készítése (PLN A=1) egy négyszög segítségével (szükséges az AgOpenGPS 6.7-es verziójához)
+      </label>
+    </div>
+
+    <p><strong>Forrás koordináta-rendszer:</strong> WGS84 (lat/lon fokban, nincs átszámítás)</p>
+
+    <input type="file" id="shapefileInput" accept=".zip" />
+    <button id="processBtn">ISOXML (TASKDATA.XML) generálása</button>
+
+    <div id="output"></div>
+  </div>
+
+  <script>
+    function escapeXmlAttr(str) {
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    document.getElementById("processBtn").addEventListener("click", async () => {
+      const fileInput = document.getElementById("shapefileInput");
+      const file = fileInput.files[0];
+      const output = document.getElementById("output");
+      output.innerHTML = "";
+
+      if (!file) {
+        output.textContent = "Tölts fel egy shapefile ZIP-et (benne .shp + .dbf párokkal).";
+        return;
+      }
+
+      const generateBoundary = document.getElementById("optBoundary").checked;
+
+      try {
+        const zip = await JSZip.loadAsync(file);
+
+        // baseName (relatív útvonal kiterjesztés nélkül) → { shpPromise, dbfPromise, path }
+        const shpMap = new Map();
+
+        zip.forEach((relativePath, zipEntry) => {
+          const lower = relativePath.toLowerCase();
+          if (!lower.endsWith(".shp") && !lower.endsWith(".dbf")) return;
+
+          const base = lower.replace(/\.shp$|\.dbf$/i, "");
+          if (!shpMap.has(base)) {
+            shpMap.set(base, { shpPromise: null, dbfPromise: null, path: relativePath });
+          }
+          const entry = shpMap.get(base);
+          if (lower.endsWith(".shp")) {
+            entry.shpPromise = zipEntry.async("arraybuffer");
+            entry.path = relativePath; // eredeti case/útvonal megőrzése
+          } else if (lower.endsWith(".dbf")) {
+            entry.dbfPromise = zipEntry.async("arraybuffer");
+          }
+        });
+
+        let xml = `<?xml version="1.0" encoding="utf-8"?>\n`;
+        xml += `<ISO11783_TaskData VersionMajor="4" VersionMinor="3" ManagementSoftwareManufacturer="chc-navline-converter" ManagementSoftwareVersion="0.2" DataTransferOrigin="1">\n`;
+
+        let pfdCounter = 1;
+        let ggpCounter = 1;
+        let gpnCounterGlobal = 1;
+        let pntCounter = 1;
+
+        let totalFields = 0;
+        let totalLines = 0;
+        let totalPoints = 0;
+
+        let summaryTable =
+          "<h3>Beolvasott shapefile-ok</h3>" +
+          "<table><thead><tr>" +
+          "<th>#</th><th>Partfield (mappa)</th><th>Shapefile</th><th>Vonalak (GGP/GPN)</th><th>Pontok</th>" +
+          "</tr></thead><tbody>";
+        let fieldIndex = 1;
+
+        for (const [base, entry] of shpMap.entries()) {
+          if (!entry.shpPromise || !entry.dbfPromise) continue;
+
+          const [shpArrayBuffer, dbfArrayBuffer] = await Promise.all([
+            entry.shpPromise,
+            entry.dbfPromise
+          ]);
+
+          const shapefileObj = { shp: shpArrayBuffer, dbf: dbfArrayBuffer };
+          const geojson = await shp(shapefileObj);
+
+          if (!geojson || !geojson.features || geojson.features.length === 0) {
+            continue;
+          }
+
+          // Partfield név: mappa neve (ha van), különben a shapefile neve
+          const pathParts = entry.path.split(/[\\/]/);
+          const fileName = pathParts[pathParts.length - 1];
+          const fileNameNoExt = fileName.replace(/\.shp$/i, "");
+          const partfieldName =
+            pathParts.length >= 3
+              ? pathParts[pathParts.length - 3]  // pl. "26-os vetés/DefaultField/NavLine.shp" → "26-os vetés"
+              : fileNameNoExt;
+
+          // Vonalak és bounding box kigyűjtése
+          const lineFeatures = [];
+
+          let latMin = +Infinity, latMax = -Infinity;
+          let lonMin = +Infinity, lonMax = -Infinity;
+
+          for (const feature of geojson.features) {
+            if (!feature.geometry) continue;
+            const geomType = feature.geometry.type;
+            const coords = feature.geometry.coordinates;
+
+            const nameProp =
+              feature.properties &&
+              (feature.properties.NAMEC || feature.properties.Name);
+
+            if (geomType === "LineString") {
+              if (!Array.isArray(coords) || coords.length === 0) continue;
+
+              lineFeatures.push({
+                name: nameProp || "",
+                coords: coords
+              });
+
+              for (const c of coords) {
+                if (!Array.isArray(c) || c.length < 2) continue;
+                const lon = Number(c[0]);
+                const lat = Number(c[1]);
+                if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+                if (lat < latMin) latMin = lat;
+                if (lat > latMax) latMax = lat;
+                if (lon < lonMin) lonMin = lon;
+                if (lon > lonMax) lonMax = lon;
+              }
+            }
+            else if (geomType === "MultiLineString") {
+              if (!Array.isArray(coords)) continue;
+
+              for (const line of coords) {
+                if (!Array.isArray(line) || line.length === 0) continue;
+
+                lineFeatures.push({
+                  name: nameProp || "",
+                  coords: line
+                });
+
+                for (const c of line) {
+                  if (!Array.isArray(c) || c.length < 2) continue;
+                  const lon = Number(c[0]);
+                  const lat = Number(c[1]);
+                  if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+                  if (lat < latMin) latMin = lat;
+                  if (lat > latMax) latMax = lat;
+                  if (lon < lonMin) lonMin = lon;
+                  if (lon > lonMax) lonMax = lon;
+                }
+              }
+            }
+          }
+
+          if (lineFeatures.length === 0) {
+            // Ebben a shapefile-ben nincs vonalgeometria
+            continue;
+          }
+
+          const pfdId = pfdCounter++;
+          totalFields++;
+
+          let fieldLineCount = 0;
+          let fieldPointCount = 0;
+
+          // PFD: D kötelező (6.7-ben közvetlenül kiolvassák), tegyünk bele "0"-t
+          xml += `  <PFD A="${pfdId}" C="${escapeXmlAttr(partfieldName)}" D="0">\n`;
+
+          // Opcionális outer boundary a 6.7-es importhoz:
+          // PLN A="1" -> LSG A="1" -> PNT (WGS84 lat/lon fok)
+          if (generateBoundary && Number.isFinite(latMin) && Number.isFinite(lonMin)) {
+            // kis margó a bounding boxra (5%)
+            const marginLat = (latMax - latMin) * 0.05 || 0.0001;
+            const marginLon = (lonMax - lonMin) * 0.05 || 0.0001;
+
+            latMin -= marginLat;
+            latMax += marginLat;
+            lonMin -= marginLon;
+            lonMax += marginLon;
+
+            const bbPoints = [
+              [lonMin, latMin],
+              [lonMax, latMin],
+              [lonMax, latMax],
+              [lonMin, latMax],
+              [lonMin, latMin] // zárjuk a polygont
+            ];
+
+            xml += `    <PLN A="1">\n`;
+            xml += `      <LSG A="1">\n`;
+
+            for (const [lon, lat] of bbPoints) {
+              xml += `        <PNT A="${pntCounter}" C="${lat.toFixed(7)}" D="${lon.toFixed(7)}"/>\n`;
+              pntCounter++;
+              totalPoints++;
+              fieldPointCount++;
+            }
+
+            xml += `      </LSG>\n`;
+            xml += `    </PLN>\n`;
+          }
+
+          // Guidance vonalak → GGP/GPN/LSG (mindkét AOG verzióhoz jó)
+          for (const lf of lineFeatures) {
+            const coords = lf.coords;
+            if (!coords || coords.length === 0) continue;
+
+            const isAB = coords.length === 2;
+            const lineType = isAB ? "1" : "3"; // 1 = AB, 3 = Curve
+
+            const gpnId = gpnCounterGlobal++;
+            const gpnName =
+              lf.name && lf.name.toString().trim().length > 0
+                ? lf.name.toString().trim()
+                : `Line ${gpnId}`;
+
+            const ggpId = ggpCounter++;
+
+            xml += `    <GGP A="${ggpId}" B="${escapeXmlAttr(partfieldName)}">\n`;
+            xml += `      <GPN A="${gpnId}" B="${escapeXmlAttr(gpnName)}" C="${lineType}">\n`;
+
+            // LSG: A="5" → ezt várja mind a 6.7-es, mind a 6.8.x-es kód (LSG[@A='5'])
+            xml += `        <LSG A="5">\n`;
+
+            for (const c of coords) {
+              if (!Array.isArray(c) || c.length < 2) continue;
+              const lon = Number(c[0]);
+              const lat = Number(c[1]);
+              if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+
+              xml += `          <PNT A="${pntCounter}" C="${lat.toFixed(7)}" D="${lon.toFixed(7)}"/>\n`;
+              pntCounter++;
+              totalPoints++;
+              fieldPointCount++;
+            }
+
+            xml += `        </LSG>\n`;
+            xml += `      </GPN>\n`;
+            xml += `    </GGP>\n`;
+
+            totalLines++;
+            fieldLineCount++;
+          }
+
+          xml += `  </PFD>\n`;
+
+          summaryTable += `<tr>
+            <td>${fieldIndex++}</td>
+            <td>${escapeXmlAttr(partfieldName)}</td>
+            <td>${escapeXmlAttr(fileNameNoExt)}</td>
+            <td>${fieldLineCount}</td>
+            <td>${fieldPointCount}</td>
+          </tr>`;
+        }
+
+        xml += `</ISO11783_TaskData>\n`;
+        summaryTable += "</tbody></table>";
+
+        if (totalFields === 0) {
+          output.innerHTML = "Nem találtam érvényes (shp+dbf) shapefile párokat a ZIP-ben, vagy nem tartalmaztak vonalakat.";
+          return;
+        }
+
+        const preview = xml.length > 8000 ? xml.substring(0, 8000) + "\n...\n[vágva]" : xml;
+
+        const html = `
+          <p><strong>Összesen ${totalFields} partfield, ${totalLines} guidance vonal és ${totalPoints} pont került az ISOXML-be.</strong></p>
+          ${summaryTable}
+          <button id="downloadXmlBtn">TASKDATA.XML letöltése</button>
+          <h3>ISOXML előnézet (első pár KB)</h3>
+          <textarea class="small-textarea" readonly>${preview}</textarea>
+        `;
+
+        output.innerHTML = html;
+
+        document.getElementById("downloadXmlBtn").addEventListener("click", () => {
+          const blob = new Blob([xml], { type: "application/xml" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "TASKDATA.XML";
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        });
+
+      } catch (err) {
+        console.error(err);
+        output.textContent = "Hiba történt a feldolgozás során: " + err.message;
+      }
+    });
+  </script>
+</body>
+</html>
