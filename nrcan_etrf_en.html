@@ -91,8 +91,14 @@ function szamol(){
 		return;
 	}
 	//Epoch?
-	const epochRe =/ITRF20 ([0-9-]{10}) /g;
-	var epoch = epochRe.exec(data)[1];
+	// Supports both old format "ITRF20 2024-01-01" and new format "ITRF2020/IGc20 2026-01-29"
+	const epochRe =/ITRF20\S* ([0-9-]{10})/g;
+	var epochMatch = epochRe.exec(data);
+	if (!epochMatch) {
+		document.getElementById('problem').innerHTML =" Could not extract epoch date from NRCAN summary.";
+		return;
+	}
+	var epoch = epochMatch[1];
 	document.getElementById('from_epoch_date').value=epoch;
 	document.getElementById('to_epoch_date').value=epoch;
 
