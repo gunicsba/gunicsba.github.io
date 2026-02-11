@@ -296,6 +296,8 @@ Y: ${toFixed(cy)}`;
       <div id="map"></div>
       <div class="row mt12">
         <button class="btn secondary" id="btnFit">Ugrás a középpontra</button>
+        <button class="btn secondary" id="btnExportShape">Shape (EOV) export letöltése</button>
+        <a class="btn secondary" id="btnKmlConv" href="https://gunicsba.github.io/shape_kml.html" target="_blank" rel="noopener">Shape (EOV) → WGS84 (KML) konverter</a>
       </div>
     </div>
 
@@ -366,9 +368,6 @@ Y: ${toFixed(cy)}`;
         <a id="paramLinkA" href="#" target="_blank" rel="noopener">Megnyitás ezekkel a paraméterekkel</a>
         <button class="btn copy" onclick="navigator.clipboard.writeText(qs('paramLink').textContent)">Link másolása</button>
       </div>
-    </div>
-        <div class="card mt16">
-      <h3><a href="./shape_kml.html">Letölött ZIP (EOV) → WGS84 KML</a></h3>
     </div>
   </div>
 </body>
