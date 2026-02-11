@@ -3,28 +3,30 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>WGS84 → EOV (HD72 / EPSG:23700) BBOX + WFS shape-zip → KML</title>
+  <title>WGS84 → EOV BBOX • WFS shape-zip link</title>
+
+  <!-- Leaflet (satellite map + rectangle selection) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+
   <style>
     :root { --bg:#0b1220; --fg:#e9eef6; --muted:#94a3b8; --acc:#7c3aed; }
-    html,body{margin:0; padding:0; background:var(--bg); color:var(--fg); font:16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif}
-    .wrap{max-width:1000px; margin:32px auto; padding:24px;}
+    html,body{margin:0; padding:0; background:var(--bg); color:var(--fg); font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+    .wrap{max-width:1100px; margin:32px auto; padding:24px}
     h1{font-size:1.6rem; margin:0 0 12px}
+    h2{font-size:1.15rem; margin:0 0 10px}
     p{margin:8px 0; color:var(--muted)}
     .card{background:#111827; border:1px solid #1f2937; border-radius:16px; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,.25)}
     label{display:block; font-weight:600; margin:10px 0 6px}
-    input, select{width:100%; box-sizing:border-box; border-radius:10px; border:1px solid #334155; background:#0b1220; color:var(--fg); padding:10px 12px; outline:none}
+    input{width:100%; box-sizing:border-box; border-radius:10px; border:1px solid #334155; background:#0b1220; color:var(--fg); padding:10px 12px; outline:none}
     input:focus{border-color:var(--acc)}
     .grid{display:grid; grid-template-columns:repeat(12,1fr); gap:12px}
-    .col3{grid-column:span 3}
     .col4{grid-column:span 4}
     .col5{grid-column:span 5}
     .col6{grid-column:span 6}
     .col7{grid-column:span 7}
-    .col8{grid-column:span 8}
-    .col12{grid-column:span 12}
     .btn{display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:12px; background:var(--acc); color:white; border:none; cursor:pointer; font-weight:700}
     .btn.secondary{background:#334155}
-    .btn.ghost{background:transparent; border:1px solid #334155}
     .out{white-space:pre-wrap; word-break:break-all; background:#0b1220; border:1px dashed #334155; padding:12px; border-radius:10px}
     .row{display:flex; gap:12px; flex-wrap:wrap; align-items:center}
     a{color:#a78bfa}
@@ -32,217 +34,342 @@
     .mt8{margin-top:8px}
     .mt12{margin-top:12px}
     .mt16{margin-top:16px}
-    .mt24{margin-top:24px}
     .copy{margin-left:8px; background:#334155}
     .ok{color:#22c55e}
     .fail{color:#ef4444}
+    .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace}
+    #map{height:480px; border-radius:14px; overflow:hidden; border:1px solid #1f2937}
+    .leaflet-container{background:#0b1220}
   </style>
-  <!-- libs: proj4 for transforms, shpjs to read SHP ZIP in browser -->
-  <script src="https://unpkg.com/proj4@2.9.1/dist/proj4.js"></script>
-  <script src="https://unpkg.com/shpjs@latest/dist/shp.min.js"></script>
-  <script>
-    // ======= Projections =======
-    // HD72 / EOV (EPSG:23700) including a common 3-parameter Helmert to WGS84.
-    // Note: For survey-grade accuracy use NTv2 grid shift (not used here, browser-friendly approximation ~meter level).
-    proj4.defs('EPSG:23700',
-      '+proj=sterea +lat_0=47.14439372222222 +lon_0=19.04857177777778 +k=0.99993 ' +
-      '+x_0=650000 +y_0=200000 +ellps=GRS67 +towgs84=52.17,-71.82,-14.9 +units=m +no_defs');
 
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/proj4@2.9.2/dist/proj4.js"></script>
+
+  <script>
     // ======= Helpers =======
-    function normNum(v){
-      if(typeof v==='string') v=v.trim().replace(',', '.');
-      const n=Number(v);
-      return Number.isFinite(n)? n : NaN;
-    }
+    const qs = id => document.getElementById(id);
+    function normNum(v){ if(typeof v==='string') v=v.trim().replace(',', '.'); const n=Number(v); return Number.isFinite(n)? n : NaN; }
     function toFixed(n, d=3){ return (Math.round(n*10**d)/10**d).toFixed(d); }
     function escXml(s){ return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&apos;"}[c])); }
+    function setStatus(msg, cls){ const el=qs('status'); if(!el) return; el.innerHTML = escXml(msg); el.className = 'out ' + (cls||''); }
 
-    function qs(id){ return document.getElementById(id); }
-
-    function setStatus(msg, ok){
-      const el = qs('corsStatus');
-      el.innerHTML = escXml(msg);
-      el.className = 'out ' + (ok===true?'ok': ok===false?'fail':'');
+    // ======= Proj4: EPSG:23700 (HD72 / EOV) =======
+    function ensureEovDef(){
+      if(!proj4.defs['EPSG:23700']){
+        proj4.defs('EPSG:23700', '+proj=somerc +lat_0=47.14439372222222 +lon_0=19.04857177777778 +k_0=0.99993 +x_0=650000 +y_0=200000 +ellps=GRS67 +towgs84=52.17,-71.82,-14.9,0,0,0,0 +units=m +no_defs');
+      }
     }
 
-    // ======= Build BBOX & URLs from inputs =======
-    function build(){
+    function wgs84ToEovLocal(lat, lon){
+      ensureEovDef();
+      const [x,y] = proj4('EPSG:4326','EPSG:23700',[lon,lat]);
+      if(!Number.isFinite(x) || !Number.isFinite(y)) throw new Error('Proj4 EOV konverzió sikertelen');
+      return {x,y};
+    }
+
+    function applyEovBbox(minx,miny,maxx,maxy, source){
+      const bboxStr = `${toFixed(minx)},${toFixed(miny)},${toFixed(maxx)},${toFixed(maxy)}`;
+      qs('bbox').textContent = bboxStr;
+      const cx = (minx+maxx)/2, cy = (miny+maxy)/2;
+      qs('eov').textContent = `EOV (EPSG:23700)
+X: ${toFixed(cx)}
+Y: ${toFixed(cy)}`;
+
+      // w/h mezők frissítése (EOV méterben)
+      qs('w').value = Math.max(1, Math.round(maxx-minx));
+      qs('h').value = Math.max(1, Math.round(maxy-miny));
+
+      // WFS link
+      const baseWFS = (qs('baseWFS').value||'').trim();
+      const typeName = (qs('typeName').value||'').trim();
+      if(baseWFS && typeName){
+        const paramsWFS = new URLSearchParams({
+          SERVICE:'WFS', VERSION:'1.1.0', REQUEST:'GetFeature',
+          TYPENAME:typeName, OUTPUTFORMAT:'shape-zip', SRSNAME:'EPSG:23700', BBOX: bboxStr
+        });
+        const wfsUrl = `${baseWFS}?${paramsWFS.toString()}`;
+        qs('wfsUrlText').textContent = wfsUrl;
+        qs('wfsUrlLink').href = wfsUrl;
+      }
+
+      // Paraméterezett link
+      const url = new URL(location.href);
+      url.searchParams.set('lat', qs('lat').value);
+      url.searchParams.set('lon', qs('lon').value);
+      url.searchParams.set('w', qs('w').value);
+      url.searchParams.set('h', qs('h').value);
+      url.searchParams.set('layer', qs('typeName').value.trim());
+      url.searchParams.set('baseWFS', qs('baseWFS').value.trim());
+      qs('paramLink').textContent = url.toString();
+      qs('paramLinkA').href = url.toString();
+
+      setStatus(source || 'BBOX frissítve.', 'ok');
+    }
+
+    function buildFromInputs(){
       const lat = normNum(qs('lat').value);
       const lon = normNum(qs('lon').value);
-      const w = normNum(qs('w').value) || 10; // meters
-      const h = normNum(qs('h').value) || 10; // meters
-
+      const w = normNum(qs('w').value);
+      const h = normNum(qs('h').value);
       if(!Number.isFinite(lat) || !Number.isFinite(lon)){
         alert('Adj meg érvényes WGS84 koordinátát (fok decimálisban).');
         return;
       }
+      const W = Number.isFinite(w) ? w : 500;
+      const H = Number.isFinite(h) ? h : 500;
 
-      // lon,lat (EPSG:4326) → EOV (EPSG:23700)
-      const [x,y] = proj4('EPSG:4326', 'EPSG:23700', [lon, lat]);
-      const minx = x - w/2, maxx = x + w/2;
-      const miny = y - h/2, maxy = y + h/2;
-
-      const eovStr = `EOV (EPSG:23700)
-X: ${toFixed(x)}
-Y: ${toFixed(y)}`;
-      const bboxStr = `${toFixed(minx)},${toFixed(miny)},${toFixed(maxx)},${toFixed(maxy)}`;
-      qs('eov').textContent = eovStr;
-      qs('bbox').textContent = bboxStr;
-
-      const baseWFS = qs('baseWFS').value.trim();
-      const typeName = qs('typeName').value.trim();
-
-      // WFS shape-zip URL
-      const paramsWFS = new URLSearchParams({
-        SERVICE:'WFS', VERSION:'1.1.0', REQUEST:'GetFeature',
-        TYPENAME:typeName, OUTPUTFORMAT:'shape-zip', SRSNAME:'EPSG:23700', BBOX: bboxStr
-      });
-      const wfsUrl = `${baseWFS}?${paramsWFS.toString()}`;
-      qs('wfsUrlText').textContent = wfsUrl;
-      qs('wfsUrlLink').href = wfsUrl;
-
-      // WMS preview links (PNG + SVG)
-      const baseWMS = qs('baseWMS').value.trim();
-      const wmsParams = (format='image/png') => new URLSearchParams({
-        REQUEST:'GetMap', SERVICE:'WMS', VERSION:'1.1.0', FORMAT:format,
-        STYLES:'', TRANSPARENT:'true', LAYERS:typeName, WIDTH:'1024', HEIGHT:'1024', SRS:'EPSG:23700', BBOX: bboxStr
-      });
-      qs('wmsPng').href = `${baseWMS}?${wmsParams('image/png').toString()}`;
-      qs('wmsSvg').href = `${baseWMS}?${wmsParams('image/svg+xml').toString()}`;
-
-      // paraméterezett link az oldalhoz
-      const url = new URL(location.href);
-      const sp = url.searchParams;
-      sp.set('lat', lat); sp.set('lon', lon); sp.set('w', w); sp.set('h', h);
-      sp.set('layer', typeName); sp.set('baseWFS', baseWFS); sp.set('baseWMS', baseWMS);
-      qs('paramLink').textContent = url.toString();
-      qs('paramLinkA').href = url.toString();
-
-      // reset status
-      setStatus('CORS teszt még nem futott.', null);
-
-      // enable copy buttons
-      document.querySelectorAll('[data-copy]').forEach(btn=>btn.disabled=false);
-    }
-
-    function copyText(id){
-      const el = qs(id);
-      const txt = el.textContent.trim();
-      navigator.clipboard.writeText(txt).then(()=>{
-        el.style.outline = '2px solid #7c3aed';
-        setTimeout(()=>{el.style.outline='none';}, 400);
-      });
-    }
-
-    // ======= GeoJSON transform & KML writer =======
-    function transformTo4326(gj){
-      function txCoords(c){
-        if (typeof c[0] === 'number'){
-          const [x,y] = c;
-          const [lon,lat] = proj4('EPSG:23700','EPSG:4326',[x,y]);
-          return [lon,lat];
-        }
-        return c.map(txCoords);
+      try{
+        const {x,y} = wgs84ToEovLocal(lat, lon);
+        applyEovBbox(x - W/2, y - H/2, x + W/2, y + H/2, 'BBOX elkészült (kézi középpont + W/H).');
+      }catch(e){
+        console.error(e);
+        setStatus('Hiba a BBOX számításnál.', 'fail');
       }
-      return {
-        type:'FeatureCollection',
-        features: gj.features.map(f=>({
-          ...f,
-          geometry: f.geometry ? { ...f.geometry, coordinates: txCoords(f.geometry.coordinates) } : null
-        }))
-      };
     }
 
-    // ======= URL paraméterek betöltése indításkor =======
+    // ======= Map (satellite) + rectangle selection =======
+    let map, drawnItems, lastRect;
+
+    function initMap(){
+      const lat = normNum(qs('lat').value);
+      const lon = normNum(qs('lon').value);
+      const startLat = Number.isFinite(lat) ? lat : 48;
+      const startLon = Number.isFinite(lon) ? lon : 20;
+
+      // Induláskor teljes Magyarország látszik
+      map = L.map('map', { zoomControl:true });
+      const huBounds = L.latLngBounds([[45.7, 16.1],[48.7, 22.9]]);
+      map.fitBounds(huBounds);
+
+      // Esri World Imagery (satellite)
+      const imagery = L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        { maxZoom: 19, attribution: 'Tiles © Esri' }
+      ).addTo(map);
+
+      // Felirat + út overlay (átlátszó) – hogy könnyebb legyen eligazodni a műholdképen
+      // CARTO "voyager_only_labels" tartalmaz településneveket + főbb utakat címkézve.
+      const labels = L.tileLayer(
+        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png',
+        {
+          subdomains: 'abcd',
+          maxZoom: 20,
+          opacity: 0.95,
+          attribution: '© OpenStreetMap contributors © CARTO'
+        }
+      ).addTo(map);
+
+      // Rétegválasztó: feliratok ki/be
+      L.control.layers(
+        { 'Műholdkép (Esri)': imagery },
+        { 'Feliratok / utak': labels },
+        { collapsed: true }
+      ).addTo(map);
+
+      drawnItems = new L.FeatureGroup();
+      map.addLayer(drawnItems);
+
+      const drawControl = new L.Control.Draw({
+        draw: {
+          polygon:false, polyline:false, circle:false, circlemarker:false, marker:false,
+          rectangle: { shapeOptions: { weight: 2 } }
+        },
+        edit: { featureGroup: drawnItems, remove: true }
+      });
+      map.addControl(drawControl);
+
+      // Click sets center
+      map.on('click', (e)=>{
+        qs('lat').value = e.latlng.lat.toFixed(8);
+        qs('lon').value = e.latlng.lng.toFixed(8);
+        buildFromInputs();
+      });
+
+      function rectToEovBbox(layer){
+        const b = layer.getBounds();
+        const corners = [
+          b.getSouthWest(),
+          b.getSouthEast(),
+          b.getNorthEast(),
+          b.getNorthWest()
+        ];
+        const eov = corners.map(c=> wgs84ToEovLocal(c.lat, c.lng));
+        const xs = eov.map(p=>p.x), ys = eov.map(p=>p.y);
+        const minx = Math.min(...xs), maxx = Math.max(...xs);
+        const miny = Math.min(...ys), maxy = Math.max(...ys);
+        return {minx,miny,maxx,maxy, bounds:b};
+      }
+
+      map.on(L.Draw.Event.CREATED, (e)=>{
+        if(lastRect) drawnItems.removeLayer(lastRect);
+        lastRect = e.layer;
+        drawnItems.addLayer(lastRect);
+        const {minx,miny,maxx,maxy, bounds} = rectToEovBbox(lastRect);
+        const center = bounds.getCenter();
+        qs('lat').value = center.lat.toFixed(8);
+        qs('lon').value = center.lng.toFixed(8);
+        applyEovBbox(minx,miny,maxx,maxy,'BBOX elkészült (téglalap kijelölés).');
+      });
+
+      map.on(L.Draw.Event.EDITED, (e)=>{
+        e.layers.eachLayer(layer=>{
+          const {minx,miny,maxx,maxy, bounds} = rectToEovBbox(layer);
+          const center = bounds.getCenter();
+          qs('lat').value = center.lat.toFixed(8);
+          qs('lon').value = center.lng.toFixed(8);
+          applyEovBbox(minx,miny,maxx,maxy,'BBOX frissítve (téglalap módosítás).');
+        });
+      });
+
+      map.on(L.Draw.Event.DELETED, ()=>{
+        lastRect = null;
+        setStatus('Téglalap törölve. Kattints a térképre vagy használd a kézi BBOX-t.', 'warn');
+      });
+
+      // induláskor NINCS előrajzolt téglalap
+    }
+
+    function drawRectFromCurrent(){
+      if(!map) return;
+      const lat = normNum(qs('lat').value);
+      const lon = normNum(qs('lon').value);
+      const w = normNum(qs('w').value);
+      const h = normNum(qs('h').value);
+      if(!Number.isFinite(lat) || !Number.isFinite(lon) || !Number.isFinite(w) || !Number.isFinite(h)) return;
+
+      // Approx: build EOV bbox then convert its center to map view only (rectangle itself drawn in lat/lon)
+      // We draw a small rectangle around the center in degrees using Leaflet distance helpers.
+      const center = L.latLng(lat, lon);
+      const north = center.destinationPoint ? null : null; // no-op (keep simple)
+      // simple degree approximation (good enough for visual selector)
+      const metersPerDegLat = 111320;
+      const metersPerDegLon = 111320 * Math.cos(lat * Math.PI/180);
+      const dLat = (h/2) / metersPerDegLat;
+      const dLon = (w/2) / metersPerDegLon;
+      const bounds = L.latLngBounds(
+        [lat - dLat, lon - dLon],
+        [lat + dLat, lon + dLon]
+      );
+
+      if(lastRect) drawnItems.removeLayer(lastRect);
+      lastRect = L.rectangle(bounds, {weight:2});
+      drawnItems.addLayer(lastRect);
+      map.fitBounds(bounds, {padding:[20,20]});
+    }
+
+    // ======= Init =======
     window.addEventListener('DOMContentLoaded', ()=>{
       const sp = new URLSearchParams(location.search);
       if(sp.has('lat')) qs('lat').value = sp.get('lat');
       if(sp.has('lon')) qs('lon').value = sp.get('lon');
       if(sp.has('w')) qs('w').value = sp.get('w');
       if(sp.has('h')) qs('h').value = sp.get('h');
-      if(sp.has('layer')) { qs('typeName').value = sp.get('layer'); qs('layers').value = sp.get('layer'); }
+      if(sp.has('layer')) qs('typeName').value = sp.get('layer');
       if(sp.has('baseWFS')) qs('baseWFS').value = sp.get('baseWFS');
-      if(sp.has('baseWMS')) qs('baseWMS').value = sp.get('baseWMS');
-      // defaults if not provided
-      if(!qs('lat').value) qs('lat').value = '47.507';
-      if(!qs('lon').value) qs('lon').value = '19.045';
-      if(!qs('w').value) qs('w').value = '10';
-      if(!qs('h').value) qs('h').value = '10';
-      build();
-      if(sp.get('auto')==='1') fetchZipAndMakeKML();
-      qs('zipInput').addEventListener('change', ev=>{
-        const f = ev.target.files && ev.target.files[0];
-        if(f) localZipToKML(f);
-      });
+
+      if(!qs('lat').value) qs('lat').value = '48';
+      if(!qs('lon').value) qs('lon').value = '20';
+      if(!qs('w').value) qs('w').value = '500';
+      if(!qs('h').value) qs('h').value = '500';
+
+      initMap();
+
+      // Buttons
+      qs('btnBuild').addEventListener('click', ()=>{ buildFromInputs(); drawRectFromCurrent(); });
+      qs('btnFit').addEventListener('click', ()=>{ if(map){ map.setView([normNum(qs('lat').value)||48, normNum(qs('lon').value)||20], 16); drawRectFromCurrent(); } });
+
+      // live update link if layer/base changes
+      qs('baseWFS').addEventListener('change', buildFromInputs);
+      qs('typeName').addEventListener('change', buildFromInputs);
     });
   </script>
 </head>
 <body>
   <div class="wrap">
-    <h1>WGS84 → EOV (HD72 / EPSG:23700) BBOX & WFS shape-zip → KML</h1>
-    <p>Adj meg egy <strong>WGS84</strong> (fok, decimális) koordinátát. Az oldal EOV-ban kiszámolja a középpontot és egy <strong>10×10 m</strong> (vagy tetszőleges) BBOX-ot, elkészíti a <em>shape-zip</em> WFS linket + WMS előnézetet. CORS engedély esetén közvetlenül letölti a shape ZIP-et és <strong>KML-t</strong> készít belőle a böngészőben. Ha a CORS tiltva van, a helyi ZIP→KML konvertert használd alább.</p>
+    <h1>WGS84 → EOV BBOX & WFS shape-zip link</h1>
+    <p class="tiny">BBOX választható kézzel (lat/lon + W/H) vagy műholdképen téglalap kijelöléssel. A WFS link EOV (EPSG:23700) BBOX-szal készül.</p>
 
     <div class="card mt16">
+      <h2>Műholdas térkép: BBOX kijelölés</h2>
+      <p class="tiny">Kattintás: középpont. Bal oldali eszköztáron: <strong>téglalap rajzolás</strong> (Draw rectangle), majd méretezheted / mozgathatod. A kijelölt téglalap EOV-ba konvertált sarkai alapján képződik a BBOX.</p>
+      <div id="map"></div>
+      <div class="row mt12">
+        <button class="btn secondary" id="btnFit">Ugrás a középpontra</button>
+      </div>
+    </div>
+
+    <div class="card mt16">
+      <h2>Kézi középpont + méret</h2>
       <div class="grid">
         <div class="col6">
           <label>Szélesség (lat, WGS84)</label>
-          <input id="lat" inputmode="decimal" placeholder="47.5" />
+          <input id="lat" inputmode="decimal" placeholder="48" />
         </div>
         <div class="col6">
           <label>Hosszúság (lon, WGS84)</label>
-          <input id="lon" inputmode="decimal" placeholder="19.0" />
+          <input id="lon" inputmode="decimal" placeholder="20" />
         </div>
         <div class="col4">
           <label>BBOX szélesség (m)</label>
-          <input id="w" inputmode="numeric" placeholder="10" />
+          <input id="w" inputmode="numeric" placeholder="500" />
         </div>
         <div class="col4">
           <label>BBOX magasság (m)</label>
-          <input id="h" inputmode="numeric" placeholder="10" />
+          <input id="h" inputmode="numeric" placeholder="500" />
         </div>
         <div class="col4" style="display:flex; align-items:end;">
-          <button class="btn" onclick="build()">BBOX & URL generálása</button>
+          <button class="btn" id="btnBuild">BBOX számítás</button>
         </div>
       </div>
 
       <div class="grid mt16">
         <div class="col6">
-          <label>EOV koordináta</label>
-          <div id="eov" class="out"></div>
-          <button class="btn copy mt8" data-copy onclick="copyText('eov')">Másolás</button>
+          <label>EOV középpont (EPSG:23700)</label>
+          <div id="eov" class="out mono"></div>
         </div>
         <div class="col6">
           <label>BBOX (EOV, minx,miny,maxx,maxy)</label>
-          <div id="bbox" class="out"></div>
-          <button class="btn copy mt8" data-copy onclick="copyText('bbox')">Másolás</button>
+          <div id="bbox" class="out mono"></div>
         </div>
       </div>
     </div>
 
     <div class="card mt16">
+      <h2>WFS link</h2>
       <div class="grid">
         <div class="col7">
           <label>WFS alap URL</label>
           <input id="baseWFS" value="https://www.oeny.hu/hk-geoserver/hrsz/wfs" />
         </div>
         <div class="col5">
-          <label>Réteg (TYPENAME / LAYERS)</label>
+          <label>Réteg (TYPENAME)</label>
           <input id="typeName" value="hrsz:foldreszlet" />
         </div>
       </div>
 
       <label class="mt12">WFS shape-zip letöltési link</label>
-      <div class="out" id="wfsUrlText"></div>
+      <div class="out mono" id="wfsUrlText"></div>
       <div class="row mt8">
         <a id="wfsUrlLink" href="#" target="_blank" rel="noopener">Megnyitás</a>
-        <button class="btn copy" data-copy onclick="copyText('wfsUrlText')">Link másolása</button>
+        <button class="btn copy" onclick="navigator.clipboard.writeText(qs('wfsUrlText').textContent)">Link másolása</button>
       </div>
+
+      <div id="status" class="out mt12">Még nincs folyamatban feladat.</div>
+    </div>
+
     <div class="card mt16">
+      <h2>Paraméterezett megnyitás</h2>
+      <p class="tiny">Indítható előre kitöltött paraméterekkel: <code>?lat=..&lon=..&w=..&h=..&layer=..&baseWFS=..</code>.</p>
+      <div class="out mono" id="paramLink"></div>
+      <div class="row mt8">
+        <a id="paramLinkA" href="#" target="_blank" rel="noopener">Megnyitás ezekkel a paraméterekkel</a>
+        <button class="btn copy" onclick="navigator.clipboard.writeText(qs('paramLink').textContent)">Link másolása</button>
+      </div>
+    </div>
+        <div class="card mt16">
       <h3><a href="./shape_kml.html">Letölött ZIP (EOV) → WGS84 KML</a></h3>
     </div>
-
-    </div>
-
   </div>
 </body>
 </html>
