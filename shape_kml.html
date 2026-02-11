@@ -393,7 +393,7 @@ function getPretty(ksh) {
           } else {
              htmltext += "<td id='telepules"+i+"'>" +shapefileData.name[k] +"</td>";
           }
-
+          htmltext += "<td></td>";
           if(feature.properties.hrsz != undefined) {
             htmltext += "<td id='foldnev"+i+"'>" + feature.properties.hrsz+"</td>";
           } else if(feature.properties.Polazon != undefined) {
