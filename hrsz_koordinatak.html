@@ -261,6 +261,8 @@ Y: ${toFixed(cy)}`;
     // ======= Init =======
     window.addEventListener('DOMContentLoaded', ()=>{
       const sp = new URLSearchParams(location.search);
+
+      // URL params → inputs
       if(sp.has('lat')) qs('lat').value = sp.get('lat');
       if(sp.has('lon')) qs('lon').value = sp.get('lon');
       if(sp.has('w')) qs('w').value = sp.get('w');
@@ -268,20 +270,46 @@ Y: ${toFixed(cy)}`;
       if(sp.has('layer')) qs('typeName').value = sp.get('layer');
       if(sp.has('baseWFS')) qs('baseWFS').value = sp.get('baseWFS');
 
+      // Defaults
       if(!qs('lat').value) qs('lat').value = '48';
       if(!qs('lon').value) qs('lon').value = '20';
       if(!qs('w').value) qs('w').value = '500';
       if(!qs('h').value) qs('h').value = '500';
 
+      // Start map: Hungary view, NO preselected rectangle
       initMap();
+      setStatus('Rajzolj téglalapot a térképen a BBOX-hoz, vagy számolj kézzel (BBOX számítás).', 'warn');
 
       // Buttons
-      qs('btnBuild').addEventListener('click', ()=>{ buildFromInputs(); drawRectFromCurrent(); });
-      qs('btnFit').addEventListener('click', ()=>{ if(map){ map.setView([normNum(qs('lat').value)||48, normNum(qs('lon').value)||20], 16); drawRectFromCurrent(); } });
+      qs('btnBuild').addEventListener('click', ()=>{
+        buildFromInputs();
+        // opcionális: a kézi középpont+W/H alapján vizuális téglalap kirajzolása
+        drawRectFromCurrent();
+      });
 
-      // live update link if layer/base changes
-      qs('baseWFS').addEventListener('change', buildFromInputs);
-      qs('typeName').addEventListener('change', buildFromInputs);
+      qs('btnFit').addEventListener('click', ()=>{
+        if(!map) return;
+        const lat = normNum(qs('lat').value) || 48;
+        const lon = normNum(qs('lon').value) || 20;
+        map.setView([lat, lon], 16);
+      });
+
+      qs('btnExportShape').addEventListener('click', ()=>{
+        const url = qs('wfsUrlLink') ? qs('wfsUrlLink').href : '';
+        if(url && url !== '#' && url.startsWith('http')){
+          window.open(url, '_blank', 'noopener');
+        } else {
+          alert('Még nincs érvényes WFS letöltési link. Előbb jelölj ki egy BBOX-ot (téglalap) vagy számolj kézzel.');
+        }
+      });
+
+      // Live update: ha baseWFS vagy layer változik és van már BBOX, frissítsük a linket
+      function hasBbox(){
+        const t = (qs('bbox').textContent || '').trim();
+        return t.length > 0;
+      }
+      qs('baseWFS').addEventListener('change', ()=>{ if(hasBbox()) buildFromInputs(); });
+      qs('typeName').addEventListener('change', ()=>{ if(hasBbox()) buildFromInputs(); });
     });
   </script>
 </head>
