@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OENY HRSZ shape-zip downloader (compact)
 // @namespace    https://gunicsba.github.io/
-// @version      0.4
+// @version      0.6
 // @description  Compact downloader for hrsz:foldreszlet using the latest captured BBOX from OENY.
 // @match        https://www.oeny.hu/oeny/hrsz-kereso/*
 // @grant        none
@@ -16,6 +16,8 @@
 
   let lastBbox = '';
   let statusEl;
+  let overscaleInput;
+  let overscaleValueEl;
 
   function createEl(tag, props = {}, style = {}) {
     const el = document.createElement(tag);
@@ -38,7 +40,7 @@
     }
   }
 
-  function normalizeBbox(input) {
+  function parseBbox(input) {
     const parts = String(input).split(',').map(x => x.trim()).filter(Boolean);
     if (parts.length !== 4 && parts.length !== 5) {
       throw new Error('Invalid BBOX');
@@ -49,8 +51,56 @@
       throw new Error('Invalid BBOX numbers');
     }
 
-    const tail = parts[4] || 'EPSG:23700';
-    return `${nums[0]},${nums[1]},${nums[2]},${nums[3]},${tail}`;
+    return {
+      minx: nums[0],
+      miny: nums[1],
+      maxx: nums[2],
+      maxy: nums[3],
+      srs: parts[4] || 'EPSG:23700'
+    };
+  }
+
+  function formatBbox({ minx, miny, maxx, maxy, srs }) {
+    return `${minx},${miny},${maxx},${maxy},${srs || 'EPSG:23700'}`;
+  }
+
+  function getOverscaleInputValue() {
+    const raw = Number(overscaleInput?.value || 1);
+    if (!Number.isFinite(raw)) return 1;
+    return Math.min(10, Math.max(1, raw));
+  }
+
+  function getAreaMultiplier() {
+    const v = getOverscaleInputValue();
+    return v * v;
+  }
+
+  function updateOverscaleLabel() {
+    if (!overscaleValueEl) return;
+    const v = getOverscaleInputValue();
+    const area = getAreaMultiplier();
+    overscaleValueEl.textContent = `${v}× width/height = ${area}× area`;
+  }
+
+  function expandBbox(input, linearScale) {
+    const box = parseBbox(input);
+
+    if (linearScale <= 1.0000001) {
+      return formatBbox(box);
+    }
+
+    const cx = (box.minx + box.maxx) / 2;
+    const cy = (box.miny + box.maxy) / 2;
+    const w = (box.maxx - box.minx) * linearScale;
+    const h = (box.maxy - box.miny) * linearScale;
+
+    return formatBbox({
+      minx: cx - w / 2,
+      miny: cy - h / 2,
+      maxx: cx + w / 2,
+      maxy: cy + h / 2,
+      srs: box.srs
+    });
   }
 
   function buildWfsUrl(bbox) {
@@ -92,9 +142,12 @@
         return;
       }
 
-      const bbox = normalizeBbox(lastBbox);
+      const linearScale = getOverscaleInputValue();
+      const areaMultiplier = getAreaMultiplier();
+      const bbox = expandBbox(lastBbox, linearScale);
       const url = buildWfsUrl(bbox);
-      setStatus('Opening shape-zip...');
+
+      setStatus(`Opening shape-zip (${linearScale}× size, ${areaMultiplier}× area)...`);
       window.open(url, '_blank', 'noopener');
     } catch (err) {
       setStatus(err.message || String(err), true);
@@ -208,7 +261,7 @@
       right: '12px',
       bottom: '12px',
       zIndex: '999999',
-      width: '260px',
+      width: '280px',
       background: '#111827',
       color: '#e5e7eb',
       border: '1px solid #374151',
@@ -233,6 +286,48 @@
       color: '#9ca3af',
       marginBottom: '10px'
     });
+
+    const overscaleWrap = createEl('div', {}, {
+      marginBottom: '10px'
+    });
+
+    const overscaleLabel = createEl('label', {
+      textContent: 'Overscale'
+    }, {
+      display: 'block',
+      fontSize: '12px',
+      color: '#9ca3af',
+      marginBottom: '4px'
+    });
+
+    overscaleInput = createEl('input', {
+      type: 'number',
+      min: '1',
+      max: '10',
+      step: '1',
+      value: '1'
+    }, {
+      width: '100%',
+      boxSizing: 'border-box',
+      background: '#0b1220',
+      color: '#e5e7eb',
+      border: '1px solid #4b5563',
+      borderRadius: '10px',
+      padding: '10px'
+    });
+
+    overscaleInput.addEventListener('input', updateOverscaleLabel);
+    overscaleInput.addEventListener('change', updateOverscaleLabel);
+
+    overscaleValueEl = createEl('div', {
+      textContent: '1× width/height = 1× area'
+    }, {
+      marginTop: '4px',
+      fontSize: '12px',
+      color: '#9ca3af'
+    });
+
+    overscaleWrap.append(overscaleLabel, overscaleInput, overscaleValueEl);
 
     const btnDownload = createEl('button', {
       textContent: 'Download shape-zip'
@@ -273,8 +368,9 @@
       color: '#86efac'
     });
 
-    host.append(title, layerInfo, btnDownload, btnConverter, statusEl);
+    host.append(title, layerInfo, overscaleWrap, btnDownload, btnConverter, statusEl);
     document.body.appendChild(host);
+    updateOverscaleLabel();
   }
 
   function init() {
