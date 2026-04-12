@@ -3,9 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>KML Polygon Merge Tool</title>
+  <title>KML / KMZ polygon kezelő</title>
   <script src="https://unpkg.com/@tmcw/togeojson@6.0.0/dist/togeojson.umd.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
     :root {
       --bg: #0f172a;
@@ -16,215 +19,77 @@
       --accent: #22c55e;
       --accent-2: #3b82f6;
       --danger: #ef4444;
+      --warning: #f59e0b;
       --border: #374151;
     }
-
     * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: Arial, Helvetica, sans-serif;
-      background: var(--bg);
-      color: var(--text);
+    body { margin: 0; font-family: Arial, Helvetica, sans-serif; background: var(--bg); color: var(--text); }
+    .wrap { max-width: 1500px; margin: 0 auto; padding: 20px; }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    .sub { color: var(--muted); margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: 470px 1fr; gap: 16px; }
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); }
+    .panel h2 { margin: 0 0 12px; font-size: 18px; }
+    .dropzone { border: 2px dashed var(--border); border-radius: 14px; padding: 18px; text-align: center; background: rgba(255,255,255,0.02); transition: 0.2s ease; margin-bottom: 12px; }
+    .dropzone.dragover { border-color: var(--accent-2); background: rgba(59,130,246,0.1); }
+    .toolbar-grid { display: grid; grid-template-columns: 1fr 150px; gap: 8px; margin-bottom: 12px; }
+    .split-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0 0; }
+    .btnrow { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+    button, .file-label, input[type="text"], input[type="number"], select {
+      border: 1px solid var(--border); background: var(--panel-2); color: var(--text); padding: 10px 12px; border-radius: 10px; font-size: 14px;
     }
-
-    .wrap {
-      max-width: 1400px;
-      margin: 0 auto;
-      padding: 20px;
-    }
-
-    h1 {
-      margin: 0 0 8px;
-      font-size: 28px;
-    }
-
-    .sub {
-      color: var(--muted);
-      margin-bottom: 18px;
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: 420px 1fr;
-      gap: 16px;
-    }
-
-    .panel {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 16px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
-    }
-
-    .panel h2 {
-      margin: 0 0 12px;
-      font-size: 18px;
-    }
-
-    .dropzone {
-      border: 2px dashed var(--border);
-      border-radius: 14px;
-      padding: 18px;
-      text-align: center;
-      background: rgba(255,255,255,0.02);
-      transition: 0.2s ease;
-      margin-bottom: 12px;
-    }
-
-    .dropzone.dragover {
-      border-color: var(--accent-2);
-      background: rgba(59,130,246,0.1);
-    }
-
-    .btnrow {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin: 12px 0;
-    }
-
-    button, .file-label {
-      border: 1px solid var(--border);
-      background: var(--panel-2);
-      color: var(--text);
-      padding: 10px 14px;
-      border-radius: 10px;
-      cursor: pointer;
-      font-size: 14px;
-    }
-
-    button:hover, .file-label:hover {
-      filter: brightness(1.08);
-    }
-
+    button, .file-label { cursor: pointer; }
+    button:hover, .file-label:hover { filter: brightness(1.08); }
     .primary { background: #14532d; border-color: #166534; }
     .blue { background: #1d4ed8; border-color: #2563eb; }
     .danger { background: #7f1d1d; border-color: #b91c1c; }
-
+    .warn { background: #78350f; border-color: #b45309; }
     input[type="file"] { display: none; }
-
-    .status {
-      min-height: 22px;
-      color: var(--muted);
-      margin-bottom: 10px;
-      white-space: pre-wrap;
-    }
-
-    .list {
-      max-height: 60vh;
-      overflow: auto;
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      background: rgba(255,255,255,0.02);
-    }
-
-    .item {
-      padding: 10px 12px;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
-      display: grid;
-      grid-template-columns: auto 1fr;
-      gap: 10px;
-      align-items: start;
-    }
-
+    .status { min-height: 22px; color: var(--muted); margin-bottom: 10px; white-space: pre-wrap; }
+    .list, .strips-list { max-height: 28vh; overflow: auto; border: 1px solid var(--border); border-radius: 12px; background: rgba(255,255,255,0.02); }
+    .item { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: start; cursor: pointer; }
+    .item:hover { background: rgba(255,255,255,0.04); }
     .item:last-child { border-bottom: none; }
-
-    .meta {
-      font-size: 12px;
-      color: var(--muted);
-      margin-top: 4px;
-      line-height: 1.4;
-    }
-
-    .name {
-      font-weight: bold;
-      word-break: break-word;
-    }
-
-    .small {
-      font-size: 12px;
-      color: var(--muted);
-    }
-
-    #map {
-      width: 100%;
-      height: 78vh;
-      border-radius: 14px;
-      overflow: hidden;
-      background: #0b1220;
-      position: relative;
-    }
-
-    .legend {
-      position: absolute;
-      left: 12px;
-      bottom: 12px;
-      background: rgba(17,24,39,0.9);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 10px 12px;
-      z-index: 500;
-      font-size: 13px;
-      color: var(--text);
-    }
-
-    .footer-note {
-      margin-top: 10px;
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.5;
-    }
-
-    .poly-label {
-      background: rgba(17,24,39,0.82);
-      border: 1px solid rgba(255,255,255,0.12);
-      color: #f9fafb;
-      border-radius: 6px;
-      padding: 2px 6px;
-      box-shadow: none;
-      font-size: 12px;
-      font-weight: bold;
-    }
-
-    .poly-label:before {
-      display: none;
-    }
-
-    .leaflet-tooltip.poly-label-hidden {
-      display: none;
-    }
-
-    @media (max-width: 1050px) {
+    .meta { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.4; }
+    .name { font-weight: bold; word-break: break-word; }
+    .small { font-size: 12px; color: var(--muted); }
+    .section-title { margin: 16px 0 8px; font-size: 15px; color: #d1d5db; font-weight: bold; }
+    #map { width: 100%; height: 82vh; border-radius: 14px; overflow: hidden; background: #0b1220; position: relative; }
+    .legend { position: absolute; left: 12px; bottom: 12px; background: rgba(17,24,39,0.92); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; z-index: 500; font-size: 13px; color: var(--text); }
+    .footer-note { margin-top: 10px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+    .poly-label { background: rgba(17,24,39,0.82); border: 1px solid rgba(255,255,255,0.12); color: #f9fafb; border-radius: 6px; padding: 2px 6px; box-shadow: none; font-size: 12px; font-weight: bold; }
+    .poly-label:before { display: none; }
+    .leaflet-tooltip.poly-label-hidden { display: none; }
+    .inline-note { margin-top: 8px; font-size: 12px; color: var(--muted); line-height: 1.4; }
+    @media (max-width: 1100px) {
       .grid { grid-template-columns: 1fr; }
       #map { height: 55vh; }
-      .list { max-height: 40vh; }
+      .list, .strips-list { max-height: 24vh; }
+      .toolbar-grid, .split-grid { grid-template-columns: 1fr; }
     }
   </style>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
   <div class="wrap">
-    <h1>KML polygon összevonó</h1>
-    <div class="sub">Húzz be egy vagy több KML fájlt, pipáld ki a kívánt polygonokat, majd vond össze őket egy új KML-be.</div>
+    <h1>KML / KMZ polygon kezelő</h1>
+    <div class="sub">Betöltés, kijelölés, összevonás, majd felosztás kiválasztott oldalról befelé épülő sávokra.</div>
 
     <div class="grid">
       <div class="panel">
         <h2>Fájlok és polygonok</h2>
 
         <div id="dropzone" class="dropzone">
-          <div><strong>Dobd ide a KML fájlokat</strong></div>
+          <div><strong>Dobd ide a KML vagy KMZ fájlokat</strong></div>
           <div class="small" style="margin-top:8px;">vagy</div>
           <div style="margin-top:10px;">
             <label class="file-label" for="fileInput">Fájlok kiválasztása</label>
-            <input id="fileInput" type="file" accept=".kml" multiple />
+            <input id="fileInput" type="file" accept=".kml,.kmz" multiple />
           </div>
         </div>
 
-        <div style="display:grid; grid-template-columns: 1fr 150px; gap:8px; margin-bottom:12px;">
-          <input id="searchInput" type="text" placeholder="Keresés név vagy hrsz alapján..." style="width:100%; border:1px solid var(--border); background:var(--panel-2); color:var(--text); padding:10px 12px; border-radius:10px; outline:none;" />
-          <select id="sortSelect" style="width:100%; border:1px solid var(--border); background:var(--panel-2); color:var(--text); padding:10px 12px; border-radius:10px; outline:none;">
+        <div class="toolbar-grid">
+          <input id="searchInput" type="text" placeholder="Keresés név vagy hrsz alapján..." />
+          <select id="sortSelect">
             <option value="az">Rendezés: A–Z</option>
             <option value="za">Rendezés: Z–A</option>
             <option value="area_desc">Terület: nagy→kicsi</option>
@@ -242,11 +107,31 @@
         </div>
 
         <div id="status" class="status">Még nincs betöltött fájl.</div>
-
         <div id="list" class="list"></div>
 
+        <div class="section-title">Felosztás sávokra</div>
+        <div class="split-grid">
+          <input id="stripWidthInput" type="number" min="0.1" step="0.1" value="18" placeholder="Egyforma sávszélesség (m)" />
+          <input id="customWidthsInput" type="text" placeholder="Kézi szélességek, pl. 108,maradék" />
+        </div>
+        <div class="btnrow">
+          <button id="pickLineBtn" class="warn">Irányvonal kijelölése (2 pont)</button>
+          <button id="clearLineBtn">Irányvonal törlése</button>
+          <button id="splitBtn" class="primary">Kiválasztott polygon felosztása</button>
+          <button id="downloadAllStripsBtn" class="blue" disabled>Összes sáv KML</button>
+        </div>
+        <div class="inline-note">
+          A felosztás a kiválasztott oldalról indul. A kézi lista sorrendje számít. Példa: <b>108,maradék</b> vagy <b>108,122</b>. Ha a lista ki van töltve, az elsőbbséget élvez.
+        </div>
+
+        <div class="section-title">Kiválasztott polygon oldalhosszai</div>
+        <div id="edgesList" class="strips-list"></div>
+
+        <div class="section-title">Legenerált sávok</div>
+        <div id="stripsList" class="strips-list"></div>
+
         <div class="footer-note">
-          Megjegyzés: az összevonás Turf.js alapú geometriai union. Ha a kiválasztott elemek nem érnek össze, a kimenet MultiPolygon is lehet. A KML export ezt is kezeli.
+          A kézi felosztás most már a kiválasztott oldalról épül befelé, nem a centroidtól vagy az ellenkező oldalról. A KMZ betöltés támogatott, a benne lévő első KML kerül feldolgozásra.
         </div>
       </div>
 
@@ -255,7 +140,10 @@
           <div class="legend">
             Kék: betöltött polygonok<br>
             Zöld: kijelölt polygonok<br>
-            Piros: eredmény
+            Piros: összevont eredmény<br>
+            Narancs: felosztott sávok<br>
+            Fehér: aktív irányvonal / oldal<br>
+            Világoskék: polygon oldalak
           </div>
         </div>
       </div>
@@ -266,8 +154,15 @@
     const fileInput = document.getElementById('fileInput');
     const dropzone = document.getElementById('dropzone');
     const listEl = document.getElementById('list');
+    const stripsListEl = document.getElementById('stripsList');
+    const edgesListEl = document.getElementById('edgesList');
     const statusEl = document.getElementById('status');
     const downloadBtn = document.getElementById('downloadBtn');
+    const downloadAllStripsBtn = document.getElementById('downloadAllStripsBtn');
+    const searchInput = document.getElementById('searchInput');
+    const sortSelect = document.getElementById('sortSelect');
+    const stripWidthInput = document.getElementById('stripWidthInput');
+    const customWidthsInput = document.getElementById('customWidthsInput');
     const LABEL_MIN_ZOOM = 17;
 
     let features = [];
@@ -276,72 +171,68 @@
     let nextId = 1;
     let searchQuery = '';
     let sortMode = 'az';
+    let splitModeArmed = false;
+    let splitLinePoints = [];
+    let splitStrips = [];
+    let activeStripId = null;
+    let activeEdgeId = null;
+    let activeEdge = null;
 
     const map = L.map('map');
-    const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 22,
       attribution: '&copy; OpenStreetMap közreműködők',
       referrerPolicy: 'strict-origin-when-cross-origin'
     }).addTo(map);
     map.setView([47.2, 19.5], 7);
 
-    let loadedLayer = L.geoJSON(null, {
-      style: feature => ({
-        color: feature?.properties?.__selected ? '#22c55e' : '#3b82f6',
-        weight: feature?.properties?.__selected ? 3 : 2,
-        fillOpacity: feature?.properties?.__selected ? 0.22 : 0.15
-      }),
-      onEachFeature: (feature, layer) => {
-        const label = feature?.properties?.__displayName || feature?.properties?.name || '';
-        if (label) {
-          layer.bindTooltip(label, {
-            permanent: true,
-            direction: 'center',
-            className: 'poly-label poly-label-hidden'
-          });
-        }
-        layer.on('click', () => {
-          const id = feature?.properties?.__id;
-          const target = features.find(f => f.properties.__id === id);
-          if (!target) return;
-          target.properties.__selected = !target.properties.__selected;
-          renderList();
-          refreshMap();
-        });
-      }
+    const loadedLayer = L.geoJSON(null, {
+      style: feature => ({ color: feature?.properties?.__selected ? '#22c55e' : '#3b82f6', weight: feature?.properties?.__selected ? 3 : 2, fillOpacity: feature?.properties?.__selected ? 0.22 : 0.15 }),
+      onEachFeature: bindFeatureInteractions
     }).addTo(map);
 
-    let selectedLayer = L.geoJSON(null, {
+    const selectedLayer = L.geoJSON(null, {
       style: () => ({ color: '#22c55e', weight: 3, fillOpacity: 0.22 }),
+      onEachFeature: bindFeatureInteractions
+    }).addTo(map);
+
+    const resultLayer = L.geoJSON(null, { style: () => ({ color: '#ef4444', weight: 4, fillOpacity: 0.18 }) }).addTo(map);
+
+    const stripsLayer = L.geoJSON(null, {
+      style: feature => ({ color: feature?.properties?.__stripId === activeStripId ? '#f8fafc' : '#f59e0b', weight: feature?.properties?.__stripId === activeStripId ? 4 : 2, fillOpacity: feature?.properties?.__stripId === activeStripId ? 0.24 : 0.16 }),
       onEachFeature: (feature, layer) => {
-        const label = feature?.properties?.__displayName || feature?.properties?.name || '';
-        if (label) {
-          layer.bindTooltip(label, {
-            permanent: true,
-            direction: 'center',
-            className: 'poly-label poly-label-hidden'
-          });
-        }
+        const label = feature?.properties?.name || `Sáv ${feature?.properties?.__stripId || ''}`;
+        layer.bindTooltip(label, { permanent: false, direction: 'center' });
         layer.on('click', () => {
-          const id = feature?.properties?.__id;
-          const target = features.find(f => f.properties.__id === id);
-          if (!target) return;
-          target.properties.__selected = !target.properties.__selected;
-          renderList();
+          activeStripId = feature?.properties?.__stripId ?? null;
+          renderStripsList();
           refreshMap();
         });
       }
     }).addTo(map);
 
-    let resultLayer = L.geoJSON(null, {
-      style: () => ({ color: '#ef4444', weight: 4, fillOpacity: 0.18 })
-    }).addTo(map);
+    const splitLineLayer = L.layerGroup().addTo(map);
+    let edgeSnapLayer = null;
 
     function updateStatus(text) {
       const extra = location.protocol === 'file:'
-        ? 'Figyelem: file:// megnyitásnál az OpenStreetMap felé a Referer hiányozhat vagy korlátozott lehet. Használd inkább helyi HTTP szerverről, pl. http://localhost alatt.'
+        ? '\nFigyelem: file:// megnyitásnál az OpenStreetMap felé a Referer hiányozhat vagy korlátozott lehet. Használd inkább helyi HTTP szerverről, pl. http://localhost alatt.'
         : '';
       statusEl.textContent = text + extra;
+    }
+
+    function bindFeatureInteractions(feature, layer) {
+      const label = feature?.properties?.__displayName || feature?.properties?.name || '';
+      if (label) layer.bindTooltip(label, { permanent: true, direction: 'center', className: 'poly-label poly-label-hidden' });
+      layer.on('click', () => {
+        const id = feature?.properties?.__id;
+        const target = features.find(f => f.properties.__id === id);
+        if (!target) return;
+        target.properties.__selected = !target.properties.__selected;
+        renderList();
+        renderEdgesList();
+        refreshMap();
+      });
     }
 
     function safeName(props, fallback) {
@@ -353,28 +244,33 @@
     }
 
     function polygonAreaHectares(feature) {
-      try {
-        const areaM2 = turf.area(feature);
-        return areaM2 / 10000;
-      } catch {
-        return null;
-      }
+      try { return turf.area(feature) / 10000; } catch { return null; }
+    }
+
+    function featureSearchText(feature) {
+      return [feature.properties?.__displayName, feature.properties?.__file, feature.properties?.hrsz, feature.properties?.name, feature.properties?.Name, feature.properties?.NAME].filter(Boolean).join(' ').toLowerCase();
+    }
+
+    async function readPossiblyKmz(file) {
+      const lower = file.name.toLowerCase();
+      if (lower.endsWith('.kml')) return await file.text();
+      if (!lower.endsWith('.kmz')) throw new Error('Nem támogatott fájltípus.');
+      const buffer = await file.arrayBuffer();
+      const zip = await JSZip.loadAsync(buffer);
+      const kmlEntry = Object.values(zip.files).find(entry => !entry.dir && entry.name.toLowerCase().endsWith('.kml'));
+      if (!kmlEntry) throw new Error('A KMZ-ben nem találtam KML fájlt.');
+      return await kmlEntry.async('string');
     }
 
     function parseKmlText(text, fileName) {
       const xml = new DOMParser().parseFromString(text, 'text/xml');
       const parseError = xml.querySelector('parsererror');
-      if (parseError) {
-        throw new Error(`Hibás KML: ${fileName}`);
-      }
-
+      if (parseError) throw new Error(`Hibás KML: ${fileName}`);
       const geojson = toGeoJSON.kml(xml);
       const out = [];
-
       for (const f of geojson.features || []) {
         if (!f.geometry) continue;
         if (f.geometry.type !== 'Polygon' && f.geometry.type !== 'MultiPolygon') continue;
-
         const cloned = JSON.parse(JSON.stringify(f));
         cloned.properties = cloned.properties || {};
         cloned.properties.__id = nextId++;
@@ -383,23 +279,20 @@
         cloned.properties.__displayName = safeName(cloned.properties, `${fileName} #${cloned.properties.__id}`);
         out.push(cloned);
       }
-
       return out;
     }
 
     async function handleFiles(fileList) {
-      const files = [...fileList].filter(f => f.name.toLowerCase().endsWith('.kml'));
+      const files = [...fileList].filter(f => /\.(kml|kmz)$/i.test(f.name));
       if (!files.length) {
-        updateStatus('Nem találtam KML fájlt a kiválasztásban.');
+        updateStatus('Nem találtam KML vagy KMZ fájlt a kiválasztásban.');
         return;
       }
-
       let added = 0;
       const errors = [];
-
       for (const file of files) {
         try {
-          const text = await file.text();
+          const text = await readPossiblyKmz(file);
           const parsed = parseKmlText(text, file.name);
           features.push(...parsed);
           added += parsed.length;
@@ -407,97 +300,211 @@
           errors.push(`${file.name}: ${err.message}`);
         }
       }
-
       renderList();
+      renderEdgesList();
       refreshMap();
       fitMap();
-
       let msg = `${files.length} fájl feldolgozva, ${added} polygon betöltve.`;
       if (errors.length) msg += `\nHibák:\n${errors.join('\n')}`;
       updateStatus(msg);
     }
 
+    function getFilteredFeatures() {
+      return features.filter(feature => !searchQuery || featureSearchText(feature).includes(searchQuery)).slice().sort((a, b) => {
+        const nameA = (a.properties.__displayName || '').toLowerCase();
+        const nameB = (b.properties.__displayName || '').toLowerCase();
+        const fileA = (a.properties.__file || '').toLowerCase();
+        const fileB = (b.properties.__file || '').toLowerCase();
+        const areaA = polygonAreaHectares(a) ?? 0;
+        const areaB = polygonAreaHectares(b) ?? 0;
+        switch (sortMode) {
+          case 'za': return nameB.localeCompare(nameA, 'hu');
+          case 'area_desc': return areaB - areaA;
+          case 'area_asc': return areaA - areaB;
+          case 'file_az': { const fileCmp = fileA.localeCompare(fileB, 'hu'); return fileCmp !== 0 ? fileCmp : nameA.localeCompare(nameB, 'hu'); }
+          default: return nameA.localeCompare(nameB, 'hu');
+        }
+      });
+    }
+
     function renderList() {
       listEl.innerHTML = '';
-
       if (!features.length) {
-        listEl.innerHTML = '<div class="item"><div class="small">Nincs még polygon.</div></div>';
+        listEl.innerHTML = '<div class="item"><div></div><div class="small">Nincs még polygon.</div><div></div></div>';
         return;
       }
-
-      const filtered = features
-        .filter(feature => {
-          if (!searchQuery) return true;
-          const hay = [
-            feature.properties.__displayName,
-            feature.properties.__file,
-            feature.properties.hrsz,
-            feature.properties.name,
-            feature.properties.Name,
-            feature.properties.NAME
-          ].filter(Boolean).join(' ').toLowerCase();
-          return hay.includes(searchQuery);
-        })
-        .slice()
-        .sort((a, b) => {
-          const nameA = (a.properties.__displayName || '').toLowerCase();
-          const nameB = (b.properties.__displayName || '').toLowerCase();
-          const fileA = (a.properties.__file || '').toLowerCase();
-          const fileB = (b.properties.__file || '').toLowerCase();
-          const areaA = polygonAreaHectares(a) ?? 0;
-          const areaB = polygonAreaHectares(b) ?? 0;
-
-          switch (sortMode) {
-            case 'za': return nameB.localeCompare(nameA, 'hu');
-            case 'area_desc': return areaB - areaA;
-            case 'area_asc': return areaA - areaB;
-            case 'file_az': {
-              const fc = fileA.localeCompare(fileB, 'hu');
-              return fc !== 0 ? fc : nameA.localeCompare(nameB, 'hu');
-            }
-            case 'az':
-            default:
-              return nameA.localeCompare(nameB, 'hu');
-          }
-        });
-
+      const filtered = getFilteredFeatures();
       if (!filtered.length) {
-        listEl.innerHTML = '<div class="item"><div class="small">Nincs találat a szűrőre.</div></div>';
+        listEl.innerHTML = '<div class="item"><div></div><div class="small">Nincs találat a szűrőre.</div><div></div></div>';
         return;
       }
-
       for (const feature of filtered) {
         const row = document.createElement('div');
         row.className = 'item';
-
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
         checkbox.checked = !!feature.properties.__selected;
-        checkbox.addEventListener('change', (ev) => {
+        checkbox.addEventListener('change', ev => {
           ev.stopPropagation();
           feature.properties.__selected = checkbox.checked;
+          renderEdgesList();
           refreshMap();
         });
-
         const area = polygonAreaHectares(feature);
         const areaText = area != null ? `${area.toFixed(3)} ha` : 'ismeretlen terület';
-
         const info = document.createElement('div');
-        info.innerHTML = `
-          <div class="name">${escapeHtml(feature.properties.__displayName)}</div>
-          <div class="meta">
-            Fájl: ${escapeHtml(feature.properties.__file)}<br>
-            Típus: ${escapeHtml(getFeatureType(feature.geometry))}<br>
-            Terület: ${escapeHtml(areaText)}
-          </div>
-        `;
-
+        info.innerHTML = `<div class="name">${escapeHtml(feature.properties.__displayName)}</div><div class="meta">Fájl: ${escapeHtml(feature.properties.__file)}<br>Típus: ${escapeHtml(getFeatureType(feature.geometry))}<br>Terület: ${escapeHtml(areaText)}</div>`;
+        const actions = document.createElement('div');
+        const dlBtn = document.createElement('button');
+        dlBtn.textContent = 'Letöltés';
+        dlBtn.addEventListener('click', ev => {
+          ev.stopPropagation();
+          downloadFeatureAsKml(feature, sanitizeFilename(feature.properties.__displayName || 'polygon') + '.kml');
+        });
+        actions.appendChild(dlBtn);
         row.appendChild(checkbox);
         row.appendChild(info);
-        row.addEventListener('click', () => {
-          zoomToFeature(feature);
-        });
+        row.appendChild(actions);
+        row.addEventListener('click', () => zoomToFeature(feature));
         listEl.appendChild(row);
+      }
+    }
+
+    function getPrimaryRingCoordinates(feature) {
+      if (!feature?.geometry) return [];
+      if (feature.geometry.type === 'Polygon') return feature.geometry.coordinates?.[0] || [];
+      if (feature.geometry.type === 'MultiPolygon') {
+        let best = [];
+        let bestArea = -1;
+        for (const poly of feature.geometry.coordinates || []) {
+          const ring = poly?.[0] || [];
+          try {
+            const area = turf.area(turf.polygon([ring]));
+            if (area > bestArea) { bestArea = area; best = ring; }
+          } catch {}
+        }
+        return best;
+      }
+      return [];
+    }
+
+    function getFeatureEdges(feature) {
+      const ring = getPrimaryRingCoordinates(feature);
+      const out = [];
+      if (!ring || ring.length < 2) return out;
+      for (let i = 0; i < ring.length - 1; i++) {
+        const start = ring[i];
+        const end = ring[i + 1];
+        const length_m = turf.distance(turf.point(start), turf.point(end), { units: 'meters' });
+        out.push({ id: i + 1, start, end, length_m });
+      }
+      return out;
+    }
+
+    function getSplitTargetFeature() {
+      const selected = features.filter(f => f.properties.__selected);
+      if (selected.length === 1) return selected[0];
+      if (mergedFeature) return mergedFeature;
+      if (selected.length > 1) throw new Error('A felosztáshoz vagy pontosan 1 polygon legyen kijelölve, vagy legyen már összevont eredmény.');
+      throw new Error('A felosztáshoz jelölj ki 1 polygont, vagy készíts összevont eredményt.');
+    }
+
+    function setActiveEdge(edge) {
+      activeEdge = edge;
+      activeEdgeId = edge?.id ?? null;
+      splitLinePoints = edge ? [edge.start, edge.end] : [];
+    }
+
+    function renderEdgesList() {
+      edgesListEl.innerHTML = '';
+      let target = null;
+      try { target = getSplitTargetFeature(); } catch { target = null; }
+      if (!target) {
+        edgesListEl.innerHTML = '<div class="item"><div></div><div class="small">A felosztáshoz kijelölt polygon oldalai itt fognak megjelenni.</div><div></div></div>';
+        return;
+      }
+      const edges = getFeatureEdges(target);
+      if (!edges.length) {
+        edgesListEl.innerHTML = '<div class="item"><div></div><div class="small">Nem sikerült oldalakká bontani a polygon geometriáját.</div><div></div></div>';
+        return;
+      }
+      if (activeEdgeId && !edges.some(e => e.id === activeEdgeId)) {
+        setActiveEdge(null);
+      }
+      for (const edge of edges) {
+        const row = document.createElement('div');
+        row.className = 'item';
+        const marker = document.createElement('div');
+        marker.textContent = edge.id === activeEdgeId ? '●' : '○';
+        marker.style.color = edge.id === activeEdgeId ? '#f8fafc' : '#60a5fa';
+        marker.style.fontSize = '18px';
+        marker.style.lineHeight = '18px';
+        const info = document.createElement('div');
+        info.innerHTML = `<div class="name">Oldal ${edge.id}</div><div class="meta">Hossz: ${edge.length_m.toFixed(2)} m<br>Kezdőpont: ${edge.start[1].toFixed(6)}, ${edge.start[0].toFixed(6)}<br>Végpont: ${edge.end[1].toFixed(6)}, ${edge.end[0].toFixed(6)}</div>`;
+        const actions = document.createElement('div');
+        const useBtn = document.createElement('button');
+        useBtn.textContent = 'Irány ehhez';
+        useBtn.addEventListener('click', ev => {
+          ev.stopPropagation();
+          setActiveEdge(edge);
+          refreshMap();
+          renderEdgesList();
+          updateStatus(`Az ${edge.id}. oldal lett beállítva kiinduló élnek.`);
+        });
+        actions.appendChild(useBtn);
+        row.appendChild(marker);
+        row.appendChild(info);
+        row.appendChild(actions);
+        row.addEventListener('click', () => {
+          setActiveEdge(edge);
+          renderEdgesList();
+          refreshMap();
+          zoomToEdge(edge);
+        });
+        edgesListEl.appendChild(row);
+      }
+    }
+
+    function renderStripsList() {
+      stripsListEl.innerHTML = '';
+      downloadAllStripsBtn.disabled = splitStrips.length === 0;
+      if (!splitStrips.length) {
+        stripsListEl.innerHTML = '<div class="item"><div></div><div class="small">Még nincs generált sáv.</div><div></div></div>';
+        return;
+      }
+      for (const strip of splitStrips) {
+        const row = document.createElement('div');
+        row.className = 'item';
+        const marker = document.createElement('div');
+        marker.textContent = strip.properties.__stripId === activeStripId ? '●' : '○';
+        marker.style.color = strip.properties.__stripId === activeStripId ? '#f8fafc' : '#f59e0b';
+        marker.style.fontSize = '18px';
+        marker.style.lineHeight = '18px';
+        const area = polygonAreaHectares(strip);
+        const areaText = area != null ? `${area.toFixed(3)} ha` : 'ismeretlen';
+        const info = document.createElement('div');
+        info.innerHTML = `<div class="name">${escapeHtml(strip.properties.name || `Sáv ${strip.properties.__stripId}`)}</div><div class="meta">Sorszám: ${strip.properties.__stripId}<br>Terület: ${escapeHtml(areaText)}<br>Szélesség: ${escapeHtml(String(strip.properties.strip_width_m))} m</div>`;
+        const actions = document.createElement('div');
+        const dlBtn = document.createElement('button');
+        dlBtn.textContent = 'Letöltés';
+        dlBtn.addEventListener('click', ev => {
+          ev.stopPropagation();
+          activeStripId = strip.properties.__stripId;
+          refreshMap();
+          renderStripsList();
+          downloadFeatureAsKml(strip, sanitizeFilename(strip.properties.name || `strip_${strip.properties.__stripId}`) + '.kml');
+        });
+        actions.appendChild(dlBtn);
+        row.appendChild(marker);
+        row.appendChild(info);
+        row.appendChild(actions);
+        row.addEventListener('click', () => {
+          activeStripId = strip.properties.__stripId;
+          renderStripsList();
+          refreshMap();
+          zoomToFeature(strip);
+        });
+        stripsListEl.appendChild(row);
       }
     }
 
@@ -505,70 +512,95 @@
       loadedLayer.clearLayers();
       selectedLayer.clearLayers();
       resultLayer.clearLayers();
+      stripsLayer.clearLayers();
+      splitLineLayer.clearLayers();
+      if (edgeSnapLayer) { map.removeLayer(edgeSnapLayer); edgeSnapLayer = null; }
 
-      if (features.length) {
-        loadedLayer.addData({ type: 'FeatureCollection', features });
-      }
-
+      if (features.length) loadedLayer.addData({ type: 'FeatureCollection', features });
       const selected = features.filter(f => f.properties.__selected);
-      if (selected.length) {
-        selectedLayer.addData({ type: 'FeatureCollection', features: selected });
+      if (selected.length) selectedLayer.addData({ type: 'FeatureCollection', features: selected });
+      if (mergedFeature) resultLayer.addData(mergedFeature);
+      if (splitStrips.length) stripsLayer.addData({ type: 'FeatureCollection', features: splitStrips });
+
+      if (splitLinePoints.length === 2) {
+        L.polyline([[splitLinePoints[0][1], splitLinePoints[0][0]], [splitLinePoints[1][1], splitLinePoints[1][0]]], { color: '#f8fafc', weight: 2, dashArray: '6,6' }).addTo(splitLineLayer);
+        L.circleMarker([splitLinePoints[0][1], splitLinePoints[0][0]], { radius: 6, color: '#f8fafc', weight: 2, fillOpacity: 1 }).addTo(splitLineLayer);
       }
 
-      if (mergedFeature) {
-        resultLayer.addData(mergedFeature);
-      }
-
+      try {
+        const target = getSplitTargetFeature();
+        const edges = getFeatureEdges(target);
+        edges.forEach(edge => {
+          const isActive = edge.id === activeEdgeId;
+          L.polyline([[edge.start[1], edge.start[0]], [edge.end[1], edge.end[0]]], { color: isActive ? '#f8fafc' : '#60a5fa', weight: isActive ? 4 : 12, opacity: isActive ? 1 : 0.06 }).addTo(splitLineLayer);
+          L.polyline([[edge.start[1], edge.start[0]], [edge.end[1], edge.end[0]]], { color: isActive ? '#f8fafc' : '#60a5fa', weight: isActive ? 4 : 2, opacity: isActive ? 1 : 0.85 }).addTo(splitLineLayer);
+        });
+        edgeSnapLayer = L.geoJSON({
+          type: 'FeatureCollection',
+          features: edges.map(edge => ({ type: 'Feature', properties: { edgeId: edge.id }, geometry: { type: 'LineString', coordinates: [edge.start, edge.end] } }))
+        }, {
+          style: () => ({ color: '#000', weight: 22, opacity: 0.001 }),
+          interactive: true,
+          onEachFeature: (feature, layer) => {
+            layer.on('click', e => {
+              L.DomEvent.stop(e);
+              const edge = edges.find(x => x.id === feature.properties.edgeId);
+              if (!edge) return;
+              setActiveEdge(edge);
+              splitModeArmed = false;
+              renderEdgesList();
+              refreshMap();
+              updateStatus(`Az ${edge.id}. oldal lett beállítva kiinduló élnek.`);
+            });
+          }
+        }).addTo(map);
+      } catch {}
       updateLabelVisibility();
     }
 
     function updateLabelVisibility() {
       const showLabels = map.getZoom() >= LABEL_MIN_ZOOM;
-      document.querySelectorAll('.leaflet-tooltip.poly-label').forEach(el => {
-        el.classList.toggle('poly-label-hidden', !showLabels);
-      });
+      document.querySelectorAll('.leaflet-tooltip.poly-label').forEach(el => el.classList.toggle('poly-label-hidden', !showLabels));
     }
 
     function fitMap() {
-      const group = L.featureGroup([loadedLayer, resultLayer]);
+      const group = L.featureGroup([loadedLayer, resultLayer, stripsLayer]);
       const bounds = group.getBounds();
-      if (bounds.isValid()) {
-        map.fitBounds(bounds.pad(0.2));
-      }
+      if (bounds.isValid()) map.fitBounds(bounds.pad(0.2));
     }
 
     function zoomToFeature(feature) {
       try {
-        const layer = L.geoJSON(feature);
-        const bounds = layer.getBounds();
-        if (bounds.isValid()) {
-          map.fitBounds(bounds.pad(0.4));
-        }
-      } catch (e) {
-        console.warn('Nem sikerült a feature-re navigálni:', e);
-      }
+        const temp = L.geoJSON(feature);
+        const bounds = temp.getBounds();
+        if (bounds.isValid()) map.fitBounds(bounds.pad(0.35));
+      } catch (e) { console.warn('Nem sikerült a feature-re navigálni:', e); }
+    }
+
+    function zoomToEdge(edge) {
+      try {
+        const line = L.polyline([[edge.start[1], edge.start[0]], [edge.end[1], edge.end[0]]]);
+        const bounds = line.getBounds();
+        if (bounds.isValid()) map.fitBounds(bounds.pad(1.2));
+      } catch (e) { console.warn('Nem sikerült az oldalra navigálni:', e); }
     }
 
     function escapeHtml(str) {
-      return String(str).replace(/[&<>"']/g, c => ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#39;'
-      })[c]);
+      return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+    }
+
+    function escapeXml(str) {
+      return String(str).replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[c]);
+    }
+
+    function sanitizeFilename(name) {
+      return String(name).replace(/[\\/:*?"<>|]+/g, '_').replace(/\s+/g, ' ').trim();
     }
 
     function normalizeToPolygonalFeature(feature) {
-      if (!feature || !feature.geometry) {
-        throw new Error('Hiányzó geometria.');
-      }
-
+      if (!feature || !feature.geometry) throw new Error('Hiányzó geometria.');
       const type = feature.geometry.type;
-      if (type === 'Polygon' || type === 'MultiPolygon') {
-        return feature;
-      }
-
+      if (type === 'Polygon' || type === 'MultiPolygon') return feature;
       throw new Error(`Nem támogatott geometria az összevonáshoz: ${type}`);
     }
 
@@ -578,43 +610,29 @@
         updateStatus('Előbb jelölj ki legalább egy polygont.');
         return;
       }
-
       try {
         let current = normalizeToPolygonalFeature(JSON.parse(JSON.stringify(selected[0])));
-
         for (let i = 1; i < selected.length; i++) {
           const next = normalizeToPolygonalFeature(JSON.parse(JSON.stringify(selected[i])));
-
           let unionResult = null;
-          try {
-            unionResult = turf.union(turf.featureCollection([current, next]));
-          } catch (e) {
-            console.warn('Union hiba, combine fallback következik:', e);
-          }
-
-          if (unionResult && unionResult.geometry && (unionResult.geometry.type === 'Polygon' || unionResult.geometry.type === 'MultiPolygon')) {
-            current = unionResult;
-          } else {
+          try { unionResult = turf.union(current, next); } catch (e) { console.warn('Union hiba, combine fallback következik:', e, { current, next }); }
+          if (unionResult && unionResult.geometry && (unionResult.geometry.type === 'Polygon' || unionResult.geometry.type === 'MultiPolygon')) current = unionResult;
+          else {
             const combined = turf.combine(turf.featureCollection([current, next]));
-            if (!combined || !combined.features || !combined.features[0] || !combined.features[0].geometry) {
-              throw new Error('Az összevonás nem sikerült ennél a polygon párosnál.');
-            }
+            if (!combined?.features?.[0]?.geometry) throw new Error('Az összevonás nem sikerült ennél a polygon párosnál.');
             current = combined.features[0];
           }
         }
-
-        current.properties = {
-          name: buildMergedName(selected),
-          merged_count: selected.length,
-          source_files: [...new Set(selected.map(f => f.properties.__file))].join(', ')
-        };
-
+        current.properties = { name: buildMergedName(selected), merged_count: selected.length, source_files: [...new Set(selected.map(f => f.properties.__file))].join(', ') };
         mergedFeature = current;
         mergedKmlText = geojsonFeatureToKml(current);
         downloadBtn.disabled = false;
+        splitStrips = [];
+        activeStripId = null;
+        renderStripsList();
+        renderEdgesList();
         refreshMap();
         fitMap();
-
         const area = polygonAreaHectares(current);
         updateStatus(`Kész. ${selected.length} polygon összevonva.${area != null ? ` Eredmény területe: ${area.toFixed(3)} ha.` : ''}`);
       } catch (err) {
@@ -636,154 +654,291 @@
     function polygonToKml(polyCoords) {
       const outer = polyCoords[0] || [];
       const inners = polyCoords.slice(1);
-      return `
-        <Polygon>
-          <outerBoundaryIs><LinearRing><coordinates>${ringToKmlCoords(outer)}</coordinates></LinearRing></outerBoundaryIs>
-          ${inners.map(r => `<innerBoundaryIs><LinearRing><coordinates>${ringToKmlCoords(r)}</coordinates></LinearRing></innerBoundaryIs>`).join('')}
-        </Polygon>
-      `;
+      return `<Polygon><outerBoundaryIs><LinearRing><coordinates>${ringToKmlCoords(outer)}</coordinates></LinearRing></outerBoundaryIs>${inners.map(r => `<innerBoundaryIs><LinearRing><coordinates>${ringToKmlCoords(r)}</coordinates></LinearRing></innerBoundaryIs>`).join('')}</Polygon>`;
     }
 
     function geojsonFeatureToKml(feature) {
-      const name = escapeXml(feature.properties?.name || 'Merged polygon');
+      const name = escapeXml(feature.properties?.name || 'Polygon');
       let geometryPart = '';
-
-      if (feature.geometry.type === 'Polygon') {
-        geometryPart = polygonToKml(feature.geometry.coordinates);
-      } else if (feature.geometry.type === 'MultiPolygon') {
-        geometryPart = `
-          <MultiGeometry>
-            ${feature.geometry.coordinates.map(poly => polygonToKml(poly)).join('')}
-          </MultiGeometry>
-        `;
-      } else {
-        throw new Error(`Nem támogatott geometria exporthoz: ${feature.geometry.type}`);
-      }
-
-      return `<?xml version="1.0" encoding="UTF-8"?>
-<kml xmlns="http://www.opengis.net/kml/2.2">
-  <Document>
-    <name>${name}</name>
-    <Style id="mergedStyle">
-      <LineStyle><color>ff0000ff</color><width>3</width></LineStyle>
-      <PolyStyle><color>6600ff00</color></PolyStyle>
-    </Style>
-    <Placemark>
-      <name>${name}</name>
-      <styleUrl>#mergedStyle</styleUrl>
-      ${geometryPart}
-    </Placemark>
-  </Document>
-</kml>`;
+      if (feature.geometry.type === 'Polygon') geometryPart = polygonToKml(feature.geometry.coordinates);
+      else if (feature.geometry.type === 'MultiPolygon') geometryPart = `<MultiGeometry>${feature.geometry.coordinates.map(poly => polygonToKml(poly)).join('')}</MultiGeometry>`;
+      else throw new Error(`Nem támogatott geometria exporthoz: ${feature.geometry.type}`);
+      return `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${name}</name><Style id="mergedStyle"><LineStyle><color>ff0000ff</color><width>3</width></LineStyle><PolyStyle><color>6600ff00</color></PolyStyle></Style><Placemark><name>${name}</name><styleUrl>#mergedStyle</styleUrl>${geometryPart}</Placemark></Document></kml>`;
     }
 
-    function escapeXml(str) {
-      return String(str).replace(/[<>&'\"]/g, c => ({
-        '<': '&lt;',
-        '>': '&gt;',
-        '&': '&amp;',
-        "'": '&apos;',
-        '"': '&quot;'
-      })[c]);
+    function featureCollectionToKml(featuresToWrite, documentName = 'Export') {
+      const placemarks = featuresToWrite.map(feature => {
+        const name = escapeXml(feature.properties?.name || 'Polygon');
+        let geometryPart = '';
+        if (feature.geometry.type === 'Polygon') geometryPart = polygonToKml(feature.geometry.coordinates);
+        else if (feature.geometry.type === 'MultiPolygon') geometryPart = `<MultiGeometry>${feature.geometry.coordinates.map(poly => polygonToKml(poly)).join('')}</MultiGeometry>`;
+        else return '';
+        return `<Placemark><name>${name}</name>${geometryPart}</Placemark>`;
+      }).join('');
+      return `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${escapeXml(documentName)}</name>${placemarks}</Document></kml>`;
     }
 
-    function downloadMergedKml() {
-      if (!mergedKmlText) return;
-      const blob = new Blob([mergedKmlText], { type: 'application/vnd.google-earth.kml+xml' });
+    function downloadText(content, filename, mime) {
+      const blob = new Blob([content], { type: mime });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'merged.kml';
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
     }
 
+    function downloadFeatureAsKml(feature, filename) {
+      downloadText(geojsonFeatureToKml(feature), filename, 'application/vnd.google-earth.kml+xml');
+    }
+
+    function downloadMergedKml() {
+      if (!mergedKmlText) return;
+      downloadText(mergedKmlText, 'merged.kml', 'application/vnd.google-earth.kml+xml');
+    }
+
+    function parseCustomWidths() {
+      const raw = customWidthsInput.value.trim();
+      if (!raw) return [];
+      const tokens = raw.split(',').map(x => x.trim()).filter(Boolean);
+      return tokens.map(token => {
+        const lower = token.toLowerCase();
+        if (['maradek', 'maradék', 'remainder', 'rest'].includes(lower)) return 'remainder';
+        const num = Number(token.replace(',', '.'));
+        if (!Number.isFinite(num) || num <= 0) throw new Error('A kézi sávszélességeknél csak pozitív számokat adj meg, például: 108,122 vagy 108,maradék');
+        return num;
+      });
+    }
+
+    function buildStripOffsets(widths) {
+      const offsets = [0];
+      for (const width of widths) offsets.push(offsets[offsets.length - 1] + width);
+      return offsets;
+    }
+
+    function pointCoord(pointFeature) {
+      return pointFeature.geometry.coordinates;
+    }
+
+    function lineToInfiniteBand(edge, fromOffsetM, toOffsetM, lineLengthKm) {
+      const bearing = turf.bearing(turf.point(edge.start), turf.point(edge.end));
+      const perpIn = bearing + 90;
+
+      const a1 = pointCoord(turf.destination(turf.point(edge.start), fromOffsetM / 1000, perpIn, { units: 'kilometers' }));
+      const b1 = pointCoord(turf.destination(turf.point(edge.end), fromOffsetM / 1000, perpIn, { units: 'kilometers' }));
+      const a2 = pointCoord(turf.destination(turf.point(edge.start), toOffsetM / 1000, perpIn, { units: 'kilometers' }));
+      const b2 = pointCoord(turf.destination(turf.point(edge.end), toOffsetM / 1000, perpIn, { units: 'kilometers' }));
+
+      const extA1Start = pointCoord(turf.destination(turf.point(a1), lineLengthKm / 2, bearing + 180, { units: 'kilometers' }));
+      const extA1End = pointCoord(turf.destination(turf.point(a1), lineLengthKm / 2, bearing, { units: 'kilometers' }));
+      const extA2Start = pointCoord(turf.destination(turf.point(a2), lineLengthKm / 2, bearing + 180, { units: 'kilometers' }));
+      const extA2End = pointCoord(turf.destination(turf.point(a2), lineLengthKm / 2, bearing, { units: 'kilometers' }));
+      const extB1Start = pointCoord(turf.destination(turf.point(b1), lineLengthKm / 2, bearing + 180, { units: 'kilometers' }));
+      const extB2End = pointCoord(turf.destination(turf.point(b2), lineLengthKm / 2, bearing, { units: 'kilometers' }));
+
+      return turf.polygon([[extA1Start, extA1End, extA2End, extA2Start, extA1Start]]);
+    }
+
+    function measureDepthFromEdge(baseFeature, edge) {
+      const ring = getPrimaryRingCoordinates(baseFeature).slice(0, -1);
+      if (!ring.length) return 0;
+      const edgeLine = turf.lineString([edge.start, edge.end]);
+      let maxDist = 0;
+      for (const c of ring) {
+        const dist = turf.pointToLineDistance(turf.point(c), edgeLine, { units: 'meters' });
+        if (dist > maxDist) maxDist = dist;
+      }
+      return maxDist;
+    }
+
+    function splitFeatureIntoBandsFromEdge(baseFeature, edge, stripSpec, defaultWidthM) {
+      const bbox = turf.bbox(baseFeature);
+      const bboxDiagKm = turf.distance(turf.point([bbox[0], bbox[1]]), turf.point([bbox[2], bbox[3]]), { units: 'kilometers' });
+      const lineLengthKm = Math.max(bboxDiagKm * 3, 1);
+      const totalDepth = measureDepthFromEdge(baseFeature, edge);
+
+      let widths = [];
+      if (stripSpec.length) {
+        let consumed = 0;
+        stripSpec.forEach(item => {
+          if (item === 'remainder') widths.push(Math.max(totalDepth - consumed, 0));
+          else {
+            widths.push(item);
+            consumed += item;
+          }
+        });
+      } else {
+        const count = Math.floor(totalDepth / defaultWidthM);
+        for (let i = 0; i < count; i++) widths.push(defaultWidthM);
+        const rem = totalDepth - count * defaultWidthM;
+        if (rem > 0.25) widths.push(rem);
+      }
+
+      widths = widths.filter(w => Number.isFinite(w) && w > 0.25);
+      const offsets = buildStripOffsets(widths);
+      const strips = [];
+
+      for (let i = 0; i < widths.length; i++) {
+        const band = lineToInfiniteBand(edge, offsets[i], offsets[i + 1], lineLengthKm);
+        let clipped = null;
+        try { clipped = turf.intersect(baseFeature, band); } catch (e) { console.warn('Intersect hiba adott sávnál:', e); }
+        if (!clipped?.geometry) continue;
+        const area = turf.area(clipped);
+        if (area < 1) continue;
+        clipped.properties = {
+          ...(clipped.properties || {}),
+          name: `${baseFeature.properties?.name || baseFeature.properties?.__displayName || 'strip_target'} - strip ${String(strips.length + 1).padStart(2, '0')}`,
+          __stripId: strips.length + 1,
+          strip_width_m: widths[i],
+          source_name: baseFeature.properties?.name || baseFeature.properties?.__displayName || 'polygon'
+        };
+        strips.push(clipped);
+      }
+      return { strips, totalDepth, widths };
+    }
+
+    function splitSelectedFeature() {
+      try {
+        const stripWidthM = Number(stripWidthInput.value);
+        const stripSpec = parseCustomWidths();
+        if (!stripSpec.length && (!Number.isFinite(stripWidthM) || stripWidthM <= 0)) {
+          throw new Error('Adj meg pozitív sávszélességet méterben, vagy kézi sávszélesség listát.');
+        }
+        const target = getSplitTargetFeature();
+        const cleanTarget = normalizeToPolygonalFeature(JSON.parse(JSON.stringify(target)));
+        if (!activeEdge) throw new Error('Előbb válassz ki egy polygon oldalt kiinduló élnek.');
+
+        splitStrips = [];
+        activeStripId = null;
+        renderStripsList();
+        refreshMap();
+
+        const result = splitFeatureIntoBandsFromEdge(cleanTarget, activeEdge, stripSpec, stripWidthM);
+        splitStrips = result.strips;
+        if (!splitStrips.length) throw new Error('Nem sikerült sávokat létrehozni ezzel az oldallal és szélességgel.');
+        activeStripId = splitStrips[0].properties.__stripId;
+        renderStripsList();
+        renderEdgesList();
+        refreshMap();
+        fitMap();
+
+        const usedWidths = result.widths.map(w => Number(w.toFixed(2)));
+        updateStatus(`Kész. ${splitStrips.length} sáv jött létre a kiválasztott oldalról indulva. Teljes mélység kb. ${result.totalDepth.toFixed(2)} m. Használt sávok: ${usedWidths.join(', ')} m.`);
+      } catch (err) {
+        console.error(err);
+        updateStatus(`Hiba a felosztás közben: ${err.message}`);
+      }
+    }
+
+    function clearSplitLine() {
+      splitModeArmed = false;
+      setActiveEdge(null);
+      refreshMap();
+      renderEdgesList();
+      updateStatus('Irányvonal / kiinduló él törölve.');
+    }
+
     function clearAll() {
       features = [];
       mergedFeature = null;
       mergedKmlText = '';
+      nextId = 1;
+      splitModeArmed = false;
+      splitLinePoints = [];
+      splitStrips = [];
+      activeStripId = null;
+      activeEdgeId = null;
+      activeEdge = null;
       downloadBtn.disabled = true;
       renderList();
+      renderStripsList();
+      renderEdgesList();
       refreshMap();
       updateStatus('Minden törölve.');
     }
 
     document.getElementById('selectAllBtn').addEventListener('click', () => {
-      const visible = features.filter(feature => {
-        if (!searchQuery) return true;
-        const hay = [
-          feature.properties.__displayName,
-          feature.properties.__file,
-          feature.properties.hrsz,
-          feature.properties.name,
-          feature.properties.Name,
-          feature.properties.NAME
-        ].filter(Boolean).join(' ').toLowerCase();
-        return hay.includes(searchQuery);
-      });
-      for (const f of visible) f.properties.__selected = true;
+      for (const feature of getFilteredFeatures()) feature.properties.__selected = true;
       renderList();
+      renderEdgesList();
       refreshMap();
     });
-
     document.getElementById('selectNoneBtn').addEventListener('click', () => {
-      const visible = features.filter(feature => {
-        if (!searchQuery) return true;
-        const hay = [
-          feature.properties.__displayName,
-          feature.properties.__file,
-          feature.properties.hrsz,
-          feature.properties.name,
-          feature.properties.Name,
-          feature.properties.NAME
-        ].filter(Boolean).join(' ').toLowerCase();
-        return hay.includes(searchQuery);
-      });
-      for (const f of visible) f.properties.__selected = false;
+      for (const feature of getFilteredFeatures()) feature.properties.__selected = false;
       renderList();
+      renderEdgesList();
       refreshMap();
     });
-
     document.getElementById('mergeBtn').addEventListener('click', mergeSelected);
     document.getElementById('downloadBtn').addEventListener('click', downloadMergedKml);
     document.getElementById('clearBtn').addEventListener('click', clearAll);
-
-    document.getElementById('searchInput').addEventListener('input', e => {
-      searchQuery = e.target.value.trim().toLowerCase();
-      renderList();
+    document.getElementById('pickLineBtn').addEventListener('click', () => {
+      splitModeArmed = true;
+      setActiveEdge(null);
+      splitStrips = [];
+      activeStripId = null;
+      renderStripsList();
+      refreshMap();
+      renderEdgesList();
+      updateStatus('Kattints le 2 pontot a térképen az irányvonalhoz. Ha polygon oldalra kattintasz, az lesz a kiinduló él.');
+    });
+    document.getElementById('clearLineBtn').addEventListener('click', clearSplitLine);
+    document.getElementById('splitBtn').addEventListener('click', splitSelectedFeature);
+    downloadAllStripsBtn.addEventListener('click', () => {
+      if (!splitStrips.length) return;
+      const name = splitStrips[0]?.properties?.source_name || 'strips';
+      downloadText(featureCollectionToKml(splitStrips, `${name} strips`), sanitizeFilename(`${name} strips`) + '.kml', 'application/vnd.google-earth.kml+xml');
     });
 
-    document.getElementById('sortSelect').addEventListener('change', e => {
-      sortMode = e.target.value;
-      renderList();
-    });
-
+    searchInput.addEventListener('input', e => { searchQuery = e.target.value.trim().toLowerCase(); renderList(); });
+    sortSelect.addEventListener('change', e => { sortMode = e.target.value; renderList(); });
     fileInput.addEventListener('change', e => handleFiles(e.target.files));
 
     ['dragenter', 'dragover'].forEach(evt => {
-      dropzone.addEventListener(evt, e => {
-        e.preventDefault();
-        e.stopPropagation();
-        dropzone.classList.add('dragover');
-      });
+      dropzone.addEventListener(evt, e => { e.preventDefault(); e.stopPropagation(); dropzone.classList.add('dragover'); });
     });
-
     ['dragleave', 'drop'].forEach(evt => {
-      dropzone.addEventListener(evt, e => {
-        e.preventDefault();
-        e.stopPropagation();
-        dropzone.classList.remove('dragover');
-      });
+      dropzone.addEventListener(evt, e => { e.preventDefault(); e.stopPropagation(); dropzone.classList.remove('dragover'); });
     });
+    dropzone.addEventListener('drop', e => handleFiles(e.dataTransfer.files));
 
-    dropzone.addEventListener('drop', e => {
-      handleFiles(e.dataTransfer.files);
+    map.on('click', e => {
+      if (!splitModeArmed) return;
+      splitLinePoints.push([e.latlng.lng, e.latlng.lat]);
+      if (splitLinePoints.length > 2) splitLinePoints = splitLinePoints.slice(-2);
+      if (splitLinePoints.length === 2) {
+        activeEdgeId = null;
+        activeEdge = { id: 'manual', start: splitLinePoints[0], end: splitLinePoints[1] };
+        splitModeArmed = false;
+        updateStatus('Irányvonal kész. Most már indítható a felosztás.');
+      } else {
+        updateStatus('Első pont lehelyezve. Kattints a második pontra.');
+      }
+      refreshMap();
+      renderEdgesList();
     });
 
     map.on('zoomend', updateLabelVisibility);
-    map.whenReady(updateLabelVisibility);
+    map.whenReady(() => {
+      updateLabelVisibility();
+      renderList();
+      renderEdgesList();
+      renderStripsList();
+    });
+
+    console.assert(escapeHtml(`a&b<c>"'`) === 'a&amp;b&lt;c&gt;&quot;&#39;', 'escapeHtml hiba');
+    console.assert(escapeXml(`a&b<c>"'`) === 'a&amp;b&lt;c&gt;&quot;&apos;', 'escapeXml hiba');
+    console.assert(JSON.stringify(buildStripOffsets([108, 122])) === JSON.stringify([0, 108, 230]), 'buildStripOffsets hiba');
+    try {
+      const testPolyA = turf.polygon([[[0,0],[0,1],[1,1],[1,0],[0,0]]]);
+      const edge = { start: [0,0], end: [1,0] };
+      const splitTest = splitFeatureIntoBandsFromEdge(testPolyA, edge, [0.5, 'remainder'], 0.5);
+      console.assert(splitTest.strips.length >= 1, 'edge-based split smoke test sikertelen');
+    } catch (e) {
+      console.warn('split smoke test hiba:', e);
+    }
   </script>
 </body>
 </html>
