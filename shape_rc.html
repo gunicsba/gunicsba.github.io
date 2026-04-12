@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shapefile attribútum szerkesztő</title>
+  <script src="https://unpkg.com/@mapbox/shp-write@latest/shpwrite.js"></script>
+  <script src="https://unpkg.com/jszip/dist/jszip.min.js"></script>
+  <script src="https://unpkg.com/shpjs@latest/dist/shp.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #fff;
+      color: #222;
+    }
+    h1, h3 {
+      color: #333;
+      text-align: center;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 10px;
+    }
+    input[type="text"], input[type="file"], input[type="number"], select, button {
+      padding: 8px;
+      margin-bottom: 10px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    button {
+      background-color: #5499c7;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #7fa92a;
+    }
+    .section-card {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 14px;
+      margin: 18px 0;
+      background: #fafafa;
+    }
+    .dropzone {
+      border: 2px dashed #5499c7;
+      border-radius: 8px;
+      padding: 18px;
+      text-align: center;
+      background: #eef6fb;
+      margin-bottom: 10px;
+    }
+    .dropzone.dragover {
+      background: #d6eaf8;
+      border-color: #2e86c1;
+    }
+    .inline-row {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr auto auto auto;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .inline-row input, .inline-row select {
+      margin-bottom: 0;
+      width: 100%;
+    }
+    .small-btn {
+      width: auto;
+      white-space: nowrap;
+      padding: 8px 12px;
+    }
+    .mono {
+      font-family: Consolas, monospace;
+    }
+    .status-box {
+      white-space: pre-wrap;
+      background: #f4f6f6;
+      border: 1px solid #d5dbdb;
+      border-radius: 6px;
+      padding: 10px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    td, th {
+      border-bottom: 1px solid #ddd;
+      padding: 6px;
+      text-align: left;
+    }
+    .checkbox-row {
+      margin: 10px 0 14px 0;
+    }
+    .checkbox-row input {
+      width: auto;
+      margin-right: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Shapefile attribútum szerkesztő</h1>
+
+    <div class="section-card">
+      <p>Itt egy meglévő shapefile ZIP-et vagy a <span class="mono">.shp + .dbf + .shx</span> fájlokat lehet betölteni, majd új attribútumokat hozzáadni konstans értékkel minden objektumhoz.</p>
+
+      <div id="shapeDropZone" class="dropzone">
+        Dobd ide a shape ZIP-et vagy a <span class="mono">.shp/.dbf/.shx</span> fájlokat
+      </div>
+
+      <input type="file" id="shapeFileInput" accept=".zip,.shp,.dbf,.shx,.prj,.cpg" multiple>
+      <input type="text" id="shapeOutputName" placeholder="Kimeneti fájlnév (pl. tabla_dozissal)">
+
+      <div class="checkbox-row">
+        <label><input type="checkbox" id="shapeOverwriteExisting"> Azonos nevű mező felülírása, ha már létezik</label>
+      </div>
+
+      <h3>Meglévő attribútumok</h3>
+      <div id="existingShapeFields" class="status-box">Még nincs shape fájl betöltve.</div>
+
+      <h3>Új attribútumok</h3>
+      <div id="extraAttributesContainer"></div>
+      <button id="addExtraAttributeBtn" class="small-btn" type="button">+ Új attribútum sor</button>
+      <button id="processShapeBtn" type="button">Shape módosítása és letöltése</button>
+
+      <h3>Állapot</h3>
+      <div id="shapeStatus" class="status-box">Várakozás fájlra...</div>
+    </div>
+  </div>
+
+<script>
+const loadedShapeContext = {
+  geojson: null,
+  sourceName: '',
+  featureCount: 0,
+  fieldNames: []
+};
+
+function base64ToArrayBuffer(base64) {
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
+function addExtraAttributeRow(defaults = {}) {
+  const container = document.getElementById('extraAttributesContainer');
+  const row = document.createElement('div');
+  row.className = 'inline-row extra-attr-row';
+  row.innerHTML = `
+    <input type="text" class="extra-attr-name" placeholder="Attribútum neve" value="${defaults.name || ''}">
+    <input type="text" class="extra-attr-value" placeholder="Érték / dózis" value="${defaults.value || ''}">
+    <select class="extra-attr-type">
+      <option value="number" ${defaults.type === 'text' ? '' : 'selected'}>Szám</option>
+      <option value="text" ${defaults.type === 'text' ? 'selected' : ''}>Szöveg</option>
+    </select>
+    <input type="number" class="extra-attr-decimals" min="0" max="10" value="${defaults.decimals ?? 2}" title="Tizedesjegyek száma">
+    <button type="button" class="small-btn remove-extra-attr">Törlés</button>
+  `;
+  row.querySelector('.remove-extra-attr').addEventListener('click', () => row.remove());
+  container.appendChild(row);
+}
+
+function sanitizeDbfFieldName(name) {
+  const normalized = (name || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Za-z0-9_]/g, '_')
+    .replace(/^_+/, '') || 'FIELD';
+  return normalized.slice(0, 10);
+}
+
+function uniqueDbfFieldName(baseName, used) {
+  let candidate = sanitizeDbfFieldName(baseName);
+  if (!used.has(candidate)) {
+    used.add(candidate);
+    return candidate;
+  }
+  for (let i = 1; i < 1000; i++) {
+    const suffix = String(i);
+    const trimmed = candidate.slice(0, Math.max(1, 10 - suffix.length)) + suffix;
+    if (!used.has(trimmed)) {
+      used.add(trimmed);
+      return trimmed;
+    }
+  }
+  throw new Error('Nem sikerült egyedi DBF mezőnevet létrehozni.');
+}
+
+function setShapeStatus(message) {
+  document.getElementById('shapeStatus').textContent = message;
+}
+
+function getSelectedShapeFiles(files) {
+  return Array.from(files || []).filter(file => /\.(zip|shp|dbf|shx|prj|cpg)$/i.test(file.name));
+}
+
+async function createZipArrayBufferFromLooseFiles(files) {
+  const zip = new JSZip();
+  for (const file of files) {
+    zip.file(file.name, file);
+  }
+  return await zip.generateAsync({ type: 'arraybuffer' });
+}
+
+function mergeGeoJsonCollections(parsed) {
+  if (!parsed) {
+    return { type: 'FeatureCollection', features: [] };
+  }
+  if (parsed.type === 'FeatureCollection') {
+    return parsed;
+  }
+  if (Array.isArray(parsed)) {
+    const collections = parsed.map(item => {
+      if (item && item.type === 'FeatureCollection') return item;
+      if (item && item.features) return { type: 'FeatureCollection', features: item.features };
+      return { type: 'FeatureCollection', features: [] };
+    });
+    return { type: 'FeatureCollection', features: collections.flatMap(item => item.features || []) };
+  }
+  if (parsed.features) {
+    return { type: 'FeatureCollection', features: parsed.features };
+  }
+  return { type: 'FeatureCollection', features: [] };
+}
+
+function inferFieldInfo(features) {
+  const fieldMap = new Map();
+  for (const feature of features) {
+    const properties = feature.properties || {};
+    for (const [key, value] of Object.entries(properties)) {
+      const current = fieldMap.get(key) || { name: key, types: new Set(), sample: '' };
+      const valueType = value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value;
+      current.types.add(valueType);
+      if (current.sample === '' && value !== null && value !== undefined) {
+        current.sample = String(value);
+      }
+      fieldMap.set(key, current);
+    }
+  }
+  return Array.from(fieldMap.values()).map(item => ({
+    name: item.name,
+    type: Array.from(item.types).join(', '),
+    sample: item.sample
+  }));
+}
+
+function renderExistingFields() {
+  const target = document.getElementById('existingShapeFields');
+  if (!loadedShapeContext.geojson) {
+    target.textContent = 'Még nincs shape fájl betöltve.';
+    return;
+  }
+  const info = inferFieldInfo(loadedShapeContext.geojson.features || []);
+  if (!info.length) {
+    target.textContent = `Betöltve: ${loadedShapeContext.featureCount} objektum, nincs attribútum.`;
+    return;
+  }
+  let html = `<strong>Objektumok száma:</strong> ${loadedShapeContext.featureCount}<br><strong>Mezők:</strong><br><table><thead><tr><th>Név</th><th>Típus</th><th>Minta</th></tr></thead><tbody>`;
+  for (const field of info) {
+    html += `<tr><td class="mono">${field.name}</td><td>${field.type}</td><td>${field.sample}</td></tr>`;
+  }
+  html += '</tbody></table>';
+  target.innerHTML = html;
+  loadedShapeContext.fieldNames = info.map(item => item.name);
+}
+
+async function loadShapeFiles(files) {
+  const selectedFiles = getSelectedShapeFiles(files);
+  if (!selectedFiles.length) {
+    setShapeStatus('Nem találtam használható shape fájlt. ZIP vagy .shp/.dbf/.shx kell.');
+    return;
+  }
+  try {
+    setShapeStatus('Shape fájl betöltése...');
+    let arrayBuffer;
+    let sourceName = selectedFiles[0].name.replace(/\.(zip|shp|dbf|shx|prj|cpg)$/i, '');
+    if (selectedFiles.length === 1 && /\.zip$/i.test(selectedFiles[0].name)) {
+      arrayBuffer = await selectedFiles[0].arrayBuffer();
+    } else {
+      arrayBuffer = await createZipArrayBufferFromLooseFiles(selectedFiles);
+    }
+    const parsed = await shp(arrayBuffer);
+    const merged = mergeGeoJsonCollections(parsed);
+    if (!merged.features || !merged.features.length) {
+      throw new Error('A shape fájlból nem sikerült objektumokat kiolvasni.');
+    }
+    loadedShapeContext.geojson = merged;
+    loadedShapeContext.sourceName = sourceName;
+    loadedShapeContext.featureCount = merged.features.length;
+    document.getElementById('shapeOutputName').value = `${sourceName}_with_attrs`;
+    renderExistingFields();
+    setShapeStatus(`Betöltve: ${merged.features.length} objektum. Most add meg az új attribútumokat.`);
+  } catch (error) {
+    console.error(error);
+    loadedShapeContext.geojson = null;
+    loadedShapeContext.sourceName = '';
+    loadedShapeContext.featureCount = 0;
+    renderExistingFields();
+    setShapeStatus(`Hiba shape beolvasás közben: ${error.message}`);
+  }
+}
+
+function collectExtraAttributeDefinitions() {
+  const rows = Array.from(document.querySelectorAll('.extra-attr-row'));
+  const defs = [];
+  for (const row of rows) {
+    const rawName = row.querySelector('.extra-attr-name').value.trim();
+    const rawValue = row.querySelector('.extra-attr-value').value.trim();
+    const type = row.querySelector('.extra-attr-type').value;
+    const decimals = Number(row.querySelector('.extra-attr-decimals').value || 0);
+    if (!rawName) continue;
+    defs.push({ rawName, rawValue, type, decimals });
+  }
+  return defs;
+}
+
+function cloneFeatureCollection(fc) {
+  return {
+    type: 'FeatureCollection',
+    features: (fc.features || []).map(feature => ({
+      type: feature.type,
+      geometry: feature.geometry ? JSON.parse(JSON.stringify(feature.geometry)) : null,
+      properties: { ...(feature.properties || {}) }
+    }))
+  };
+}
+
+function parseAttributeValue(def) {
+  if (def.type === 'text') {
+    return def.rawValue;
+  }
+  const numeric = Number(def.rawValue.replace(',', '.'));
+  if (Number.isNaN(numeric)) {
+    throw new Error(`A(z) "${def.rawName}" mező értéke nem szám.`);
+  }
+  return Number(numeric.toFixed(def.decimals));
+}
+
+async function exportModifiedShape() {
+  if (!loadedShapeContext.geojson) {
+    setShapeStatus('Előbb tölts be egy shape fájlt.');
+    return;
+  }
+  const defs = collectExtraAttributeDefinitions();
+  if (!defs.length) {
+    setShapeStatus('Adj meg legalább egy új attribútumot.');
+    return;
+  }
+  try {
+    const overwriteExisting = document.getElementById('shapeOverwriteExisting').checked;
+    const outputNameRaw = document.getElementById('shapeOutputName').value.trim() || `${loadedShapeContext.sourceName}_with_attrs`;
+    const outputName = outputNameRaw.replace(/[^A-Za-z0-9._-]/g, '_');
+    const cloned = cloneFeatureCollection(loadedShapeContext.geojson);
+    const usedNames = new Set((loadedShapeContext.fieldNames || []).map(name => sanitizeDbfFieldName(name)));
+    const mappings = [];
+    for (const def of defs) {
+      const sanitized = sanitizeDbfFieldName(def.rawName);
+      let finalName;
+      if (overwriteExisting && usedNames.has(sanitized)) {
+        finalName = sanitized;
+      } else if (!overwriteExisting && usedNames.has(sanitized)) {
+        finalName = uniqueDbfFieldName(sanitized, usedNames);
+      } else {
+        finalName = uniqueDbfFieldName(sanitized, usedNames);
+      }
+      mappings.push({ ...def, finalName, value: parseAttributeValue(def) });
+    }
+    for (const feature of cloned.features) {
+      feature.properties = feature.properties || {};
+      for (const mapping of mappings) {
+        feature.properties[mapping.finalName] = mapping.value;
+      }
+    }
+    setShapeStatus('Export folyamatban...');
+    const shapefileBase64 = await shpwrite.zip(cloned, { folder: outputName });
+    const shapefileBinary = base64ToArrayBuffer(shapefileBase64);
+    const blob = new Blob([shapefileBinary], { type: 'application/zip' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${outputName}.zip`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+    const mappingText = mappings.map(item => `${item.rawName} -> ${item.finalName} = ${item.value}`).join('\n');
+    setShapeStatus(`Kész. Letöltés elindítva.\n\nÚj mezők:\n${mappingText}\n\nMegjegyzés: a DBF mezőtípus/hossz végső formáját az exportáló library állítja elő.`);
+  } catch (error) {
+    console.error(error);
+    setShapeStatus(`Hiba export közben: ${error.message}`);
+  }
+}
+
+function setupShapeDropZone() {
+  const dropZone = document.getElementById('shapeDropZone');
+  const fileInput = document.getElementById('shapeFileInput');
+  ['dragenter', 'dragover'].forEach(eventName => {
+    dropZone.addEventListener(eventName, event => {
+      event.preventDefault();
+      event.stopPropagation();
+      dropZone.classList.add('dragover');
+    });
+  });
+  ['dragleave', 'drop'].forEach(eventName => {
+    dropZone.addEventListener(eventName, event => {
+      event.preventDefault();
+      event.stopPropagation();
+      dropZone.classList.remove('dragover');
+    });
+  });
+  dropZone.addEventListener('drop', event => {
+    loadShapeFiles(event.dataTransfer.files);
+  });
+  fileInput.addEventListener('change', event => {
+    loadShapeFiles(event.target.files);
+  });
+}
+
+document.getElementById('addExtraAttributeBtn').addEventListener('click', () => addExtraAttributeRow());
+document.getElementById('processShapeBtn').addEventListener('click', exportModifiedShape);
+setupShapeDropZone();
+addExtraAttributeRow({ name: 'DOSE', value: '50', type: 'number', decimals: 2 });
+</script>
+</body>
+</html>
