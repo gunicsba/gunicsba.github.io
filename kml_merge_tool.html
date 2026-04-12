@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KML Polygon Merge Tool</title>
+  <script src="https://unpkg.com/@tmcw/togeojson@6.0.0/dist/togeojson.umd.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --panel-2: #1f2937;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --accent: #22c55e;
+      --accent-2: #3b82f6;
+      --danger: #ef4444;
+      --border: #374151;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .wrap {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+    }
+
+    .sub {
+      color: var(--muted);
+      margin-bottom: 18px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 420px 1fr;
+      gap: 16px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    }
+
+    .panel h2 {
+      margin: 0 0 12px;
+      font-size: 18px;
+    }
+
+    .dropzone {
+      border: 2px dashed var(--border);
+      border-radius: 14px;
+      padding: 18px;
+      text-align: center;
+      background: rgba(255,255,255,0.02);
+      transition: 0.2s ease;
+      margin-bottom: 12px;
+    }
+
+    .dropzone.dragover {
+      border-color: var(--accent-2);
+      background: rgba(59,130,246,0.1);
+    }
+
+    .btnrow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 12px 0;
+    }
+
+    button, .file-label {
+      border: 1px solid var(--border);
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 10px 14px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    button:hover, .file-label:hover {
+      filter: brightness(1.08);
+    }
+
+    .primary { background: #14532d; border-color: #166534; }
+    .blue { background: #1d4ed8; border-color: #2563eb; }
+    .danger { background: #7f1d1d; border-color: #b91c1c; }
+
+    input[type="file"] { display: none; }
+
+    .status {
+      min-height: 22px;
+      color: var(--muted);
+      margin-bottom: 10px;
+      white-space: pre-wrap;
+    }
+
+    .list {
+      max-height: 60vh;
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: rgba(255,255,255,0.02);
+    }
+
+    .item {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 10px;
+      align-items: start;
+    }
+
+    .item:last-child { border-bottom: none; }
+
+    .meta {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
+      line-height: 1.4;
+    }
+
+    .name {
+      font-weight: bold;
+      word-break: break-word;
+    }
+
+    .small {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    #map {
+      width: 100%;
+      height: 78vh;
+      border-radius: 14px;
+      overflow: hidden;
+      background: #0b1220;
+      position: relative;
+    }
+
+    .legend {
+      position: absolute;
+      left: 12px;
+      bottom: 12px;
+      background: rgba(17,24,39,0.9);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      z-index: 500;
+      font-size: 13px;
+      color: var(--text);
+    }
+
+    .footer-note {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .poly-label {
+      background: rgba(17,24,39,0.82);
+      border: 1px solid rgba(255,255,255,0.12);
+      color: #f9fafb;
+      border-radius: 6px;
+      padding: 2px 6px;
+      box-shadow: none;
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    .poly-label:before {
+      display: none;
+    }
+
+    .leaflet-tooltip.poly-label-hidden {
+      display: none;
+    }
+
+    @media (max-width: 1050px) {
+      .grid { grid-template-columns: 1fr; }
+      #map { height: 55vh; }
+      .list { max-height: 40vh; }
+    }
+  </style>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body>
+  <div class="wrap">
+    <h1>KML polygon összevonó</h1>
+    <div class="sub">Húzz be egy vagy több KML fájlt, pipáld ki a kívánt polygonokat, majd vond össze őket egy új KML-be.</div>
+
+    <div class="grid">
+      <div class="panel">
+        <h2>Fájlok és polygonok</h2>
+
+        <div id="dropzone" class="dropzone">
+          <div><strong>Dobd ide a KML fájlokat</strong></div>
+          <div class="small" style="margin-top:8px;">vagy</div>
+          <div style="margin-top:10px;">
+            <label class="file-label" for="fileInput">Fájlok kiválasztása</label>
+            <input id="fileInput" type="file" accept=".kml" multiple />
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 150px; gap:8px; margin-bottom:12px;">
+          <input id="searchInput" type="text" placeholder="Keresés név vagy hrsz alapján..." style="width:100%; border:1px solid var(--border); background:var(--panel-2); color:var(--text); padding:10px 12px; border-radius:10px; outline:none;" />
+          <select id="sortSelect" style="width:100%; border:1px solid var(--border); background:var(--panel-2); color:var(--text); padding:10px 12px; border-radius:10px; outline:none;">
+            <option value="az">Rendezés: A–Z</option>
+            <option value="za">Rendezés: Z–A</option>
+            <option value="area_desc">Terület: nagy→kicsi</option>
+            <option value="area_asc">Terület: kicsi→nagy</option>
+            <option value="file_az">Fájl: A–Z</option>
+          </select>
+        </div>
+
+        <div class="btnrow">
+          <button id="selectAllBtn">Összes kijelölése</button>
+          <button id="selectNoneBtn">Kijelölés törlése</button>
+          <button id="mergeBtn" class="primary">Kijelöltek összevonása</button>
+          <button id="downloadBtn" class="blue" disabled>KML letöltése</button>
+          <button id="clearBtn" class="danger">Minden törlése</button>
+        </div>
+
+        <div id="status" class="status">Még nincs betöltött fájl.</div>
+
+        <div id="list" class="list"></div>
+
+        <div class="footer-note">
+          Megjegyzés: az összevonás Turf.js alapú geometriai union. Ha a kiválasztott elemek nem érnek össze, a kimenet MultiPolygon is lehet. A KML export ezt is kezeli.
+        </div>
+      </div>
+
+      <div class="panel" style="padding:12px;">
+        <div id="map">
+          <div class="legend">
+            Kék: betöltött polygonok<br>
+            Zöld: kijelölt polygonok<br>
+            Piros: eredmény
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const dropzone = document.getElementById('dropzone');
+    const listEl = document.getElementById('list');
+    const statusEl = document.getElementById('status');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const LABEL_MIN_ZOOM = 17;
+
+    let features = [];
+    let mergedFeature = null;
+    let mergedKmlText = '';
+    let nextId = 1;
+    let searchQuery = '';
+    let sortMode = 'az';
+
+    const map = L.map('map');
+    const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 22,
+      attribution: '&copy; OpenStreetMap közreműködők',
+      referrerPolicy: 'strict-origin-when-cross-origin'
+    }).addTo(map);
+    map.setView([47.2, 19.5], 7);
+
+    let loadedLayer = L.geoJSON(null, {
+      style: feature => ({
+        color: feature?.properties?.__selected ? '#22c55e' : '#3b82f6',
+        weight: feature?.properties?.__selected ? 3 : 2,
+        fillOpacity: feature?.properties?.__selected ? 0.22 : 0.15
+      }),
+      onEachFeature: (feature, layer) => {
+        const label = feature?.properties?.__displayName || feature?.properties?.name || '';
+        if (label) {
+          layer.bindTooltip(label, {
+            permanent: true,
+            direction: 'center',
+            className: 'poly-label poly-label-hidden'
+          });
+        }
+        layer.on('click', () => {
+          const id = feature?.properties?.__id;
+          const target = features.find(f => f.properties.__id === id);
+          if (!target) return;
+          target.properties.__selected = !target.properties.__selected;
+          renderList();
+          refreshMap();
+        });
+      }
+    }).addTo(map);
+
+    let selectedLayer = L.geoJSON(null, {
+      style: () => ({ color: '#22c55e', weight: 3, fillOpacity: 0.22 }),
+      onEachFeature: (feature, layer) => {
+        const label = feature?.properties?.__displayName || feature?.properties?.name || '';
+        if (label) {
+          layer.bindTooltip(label, {
+            permanent: true,
+            direction: 'center',
+            className: 'poly-label poly-label-hidden'
+          });
+        }
+        layer.on('click', () => {
+          const id = feature?.properties?.__id;
+          const target = features.find(f => f.properties.__id === id);
+          if (!target) return;
+          target.properties.__selected = !target.properties.__selected;
+          renderList();
+          refreshMap();
+        });
+      }
+    }).addTo(map);
+
+    let resultLayer = L.geoJSON(null, {
+      style: () => ({ color: '#ef4444', weight: 4, fillOpacity: 0.18 })
+    }).addTo(map);
+
+    function updateStatus(text) {
+      const extra = location.protocol === 'file:'
+        ? 'Figyelem: file:// megnyitásnál az OpenStreetMap felé a Referer hiányozhat vagy korlátozott lehet. Használd inkább helyi HTTP szerverről, pl. http://localhost alatt.'
+        : '';
+      statusEl.textContent = text + extra;
+    }
+
+    function safeName(props, fallback) {
+      return props?.name || props?.Name || props?.NAME || props?.hrsz || fallback;
+    }
+
+    function getFeatureType(geom) {
+      return geom?.type || 'ismeretlen';
+    }
+
+    function polygonAreaHectares(feature) {
+      try {
+        const areaM2 = turf.area(feature);
+        return areaM2 / 10000;
+      } catch {
+        return null;
+      }
+    }
+
+    function parseKmlText(text, fileName) {
+      const xml = new DOMParser().parseFromString(text, 'text/xml');
+      const parseError = xml.querySelector('parsererror');
+      if (parseError) {
+        throw new Error(`Hibás KML: ${fileName}`);
+      }
+
+      const geojson = toGeoJSON.kml(xml);
+      const out = [];
+
+      for (const f of geojson.features || []) {
+        if (!f.geometry) continue;
+        if (f.geometry.type !== 'Polygon' && f.geometry.type !== 'MultiPolygon') continue;
+
+        const cloned = JSON.parse(JSON.stringify(f));
+        cloned.properties = cloned.properties || {};
+        cloned.properties.__id = nextId++;
+        cloned.properties.__file = fileName;
+        cloned.properties.__selected = false;
+        cloned.properties.__displayName = safeName(cloned.properties, `${fileName} #${cloned.properties.__id}`);
+        out.push(cloned);
+      }
+
+      return out;
+    }
+
+    async function handleFiles(fileList) {
+      const files = [...fileList].filter(f => f.name.toLowerCase().endsWith('.kml'));
+      if (!files.length) {
+        updateStatus('Nem találtam KML fájlt a kiválasztásban.');
+        return;
+      }
+
+      let added = 0;
+      const errors = [];
+
+      for (const file of files) {
+        try {
+          const text = await file.text();
+          const parsed = parseKmlText(text, file.name);
+          features.push(...parsed);
+          added += parsed.length;
+        } catch (err) {
+          errors.push(`${file.name}: ${err.message}`);
+        }
+      }
+
+      renderList();
+      refreshMap();
+      fitMap();
+
+      let msg = `${files.length} fájl feldolgozva, ${added} polygon betöltve.`;
+      if (errors.length) msg += `\nHibák:\n${errors.join('\n')}`;
+      updateStatus(msg);
+    }
+
+    function renderList() {
+      listEl.innerHTML = '';
+
+      if (!features.length) {
+        listEl.innerHTML = '<div class="item"><div class="small">Nincs még polygon.</div></div>';
+        return;
+      }
+
+      const filtered = features
+        .filter(feature => {
+          if (!searchQuery) return true;
+          const hay = [
+            feature.properties.__displayName,
+            feature.properties.__file,
+            feature.properties.hrsz,
+            feature.properties.name,
+            feature.properties.Name,
+            feature.properties.NAME
+          ].filter(Boolean).join(' ').toLowerCase();
+          return hay.includes(searchQuery);
+        })
+        .slice()
+        .sort((a, b) => {
+          const nameA = (a.properties.__displayName || '').toLowerCase();
+          const nameB = (b.properties.__displayName || '').toLowerCase();
+          const fileA = (a.properties.__file || '').toLowerCase();
+          const fileB = (b.properties.__file || '').toLowerCase();
+          const areaA = polygonAreaHectares(a) ?? 0;
+          const areaB = polygonAreaHectares(b) ?? 0;
+
+          switch (sortMode) {
+            case 'za': return nameB.localeCompare(nameA, 'hu');
+            case 'area_desc': return areaB - areaA;
+            case 'area_asc': return areaA - areaB;
+            case 'file_az': {
+              const fc = fileA.localeCompare(fileB, 'hu');
+              return fc !== 0 ? fc : nameA.localeCompare(nameB, 'hu');
+            }
+            case 'az':
+            default:
+              return nameA.localeCompare(nameB, 'hu');
+          }
+        });
+
+      if (!filtered.length) {
+        listEl.innerHTML = '<div class="item"><div class="small">Nincs találat a szűrőre.</div></div>';
+        return;
+      }
+
+      for (const feature of filtered) {
+        const row = document.createElement('div');
+        row.className = 'item';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = !!feature.properties.__selected;
+        checkbox.addEventListener('change', (ev) => {
+          ev.stopPropagation();
+          feature.properties.__selected = checkbox.checked;
+          refreshMap();
+        });
+
+        const area = polygonAreaHectares(feature);
+        const areaText = area != null ? `${area.toFixed(3)} ha` : 'ismeretlen terület';
+
+        const info = document.createElement('div');
+        info.innerHTML = `
+          <div class="name">${escapeHtml(feature.properties.__displayName)}</div>
+          <div class="meta">
+            Fájl: ${escapeHtml(feature.properties.__file)}<br>
+            Típus: ${escapeHtml(getFeatureType(feature.geometry))}<br>
+            Terület: ${escapeHtml(areaText)}
+          </div>
+        `;
+
+        row.appendChild(checkbox);
+        row.appendChild(info);
+        row.addEventListener('click', () => {
+          zoomToFeature(feature);
+        });
+        listEl.appendChild(row);
+      }
+    }
+
+    function refreshMap() {
+      loadedLayer.clearLayers();
+      selectedLayer.clearLayers();
+      resultLayer.clearLayers();
+
+      if (features.length) {
+        loadedLayer.addData({ type: 'FeatureCollection', features });
+      }
+
+      const selected = features.filter(f => f.properties.__selected);
+      if (selected.length) {
+        selectedLayer.addData({ type: 'FeatureCollection', features: selected });
+      }
+
+      if (mergedFeature) {
+        resultLayer.addData(mergedFeature);
+      }
+
+      updateLabelVisibility();
+    }
+
+    function updateLabelVisibility() {
+      const showLabels = map.getZoom() >= LABEL_MIN_ZOOM;
+      document.querySelectorAll('.leaflet-tooltip.poly-label').forEach(el => {
+        el.classList.toggle('poly-label-hidden', !showLabels);
+      });
+    }
+
+    function fitMap() {
+      const group = L.featureGroup([loadedLayer, resultLayer]);
+      const bounds = group.getBounds();
+      if (bounds.isValid()) {
+        map.fitBounds(bounds.pad(0.2));
+      }
+    }
+
+    function zoomToFeature(feature) {
+      try {
+        const layer = L.geoJSON(feature);
+        const bounds = layer.getBounds();
+        if (bounds.isValid()) {
+          map.fitBounds(bounds.pad(0.4));
+        }
+      } catch (e) {
+        console.warn('Nem sikerült a feature-re navigálni:', e);
+      }
+    }
+
+    function escapeHtml(str) {
+      return String(str).replace(/[&<>"']/g, c => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      })[c]);
+    }
+
+    function normalizeToPolygonalFeature(feature) {
+      if (!feature || !feature.geometry) {
+        throw new Error('Hiányzó geometria.');
+      }
+
+      const type = feature.geometry.type;
+      if (type === 'Polygon' || type === 'MultiPolygon') {
+        return feature;
+      }
+
+      throw new Error(`Nem támogatott geometria az összevonáshoz: ${type}`);
+    }
+
+    function mergeSelected() {
+      const selected = features.filter(f => f.properties.__selected);
+      if (!selected.length) {
+        updateStatus('Előbb jelölj ki legalább egy polygont.');
+        return;
+      }
+
+      try {
+        let current = normalizeToPolygonalFeature(JSON.parse(JSON.stringify(selected[0])));
+
+        for (let i = 1; i < selected.length; i++) {
+          const next = normalizeToPolygonalFeature(JSON.parse(JSON.stringify(selected[i])));
+
+          let unionResult = null;
+          try {
+            unionResult = turf.union(turf.featureCollection([current, next]));
+          } catch (e) {
+            console.warn('Union hiba, combine fallback következik:', e);
+          }
+
+          if (unionResult && unionResult.geometry && (unionResult.geometry.type === 'Polygon' || unionResult.geometry.type === 'MultiPolygon')) {
+            current = unionResult;
+          } else {
+            const combined = turf.combine(turf.featureCollection([current, next]));
+            if (!combined || !combined.features || !combined.features[0] || !combined.features[0].geometry) {
+              throw new Error('Az összevonás nem sikerült ennél a polygon párosnál.');
+            }
+            current = combined.features[0];
+          }
+        }
+
+        current.properties = {
+          name: buildMergedName(selected),
+          merged_count: selected.length,
+          source_files: [...new Set(selected.map(f => f.properties.__file))].join(', ')
+        };
+
+        mergedFeature = current;
+        mergedKmlText = geojsonFeatureToKml(current);
+        downloadBtn.disabled = false;
+        refreshMap();
+        fitMap();
+
+        const area = polygonAreaHectares(current);
+        updateStatus(`Kész. ${selected.length} polygon összevonva.${area != null ? ` Eredmény területe: ${area.toFixed(3)} ha.` : ''}`);
+      } catch (err) {
+        console.error(err);
+        updateStatus(`Hiba az összevonás közben: ${err.message}`);
+      }
+    }
+
+    function buildMergedName(selected) {
+      const names = selected.map(f => f.properties.__displayName).slice(0, 6);
+      const suffix = selected.length > 6 ? ` +${selected.length - 6} további` : '';
+      return `Merged: ${names.join(', ')}${suffix}`;
+    }
+
+    function ringToKmlCoords(ring) {
+      return ring.map(coord => `${coord[0]},${coord[1]},${coord[2] || 0}`).join(' ');
+    }
+
+    function polygonToKml(polyCoords) {
+      const outer = polyCoords[0] || [];
+      const inners = polyCoords.slice(1);
+      return `
+        <Polygon>
+          <outerBoundaryIs><LinearRing><coordinates>${ringToKmlCoords(outer)}</coordinates></LinearRing></outerBoundaryIs>
+          ${inners.map(r => `<innerBoundaryIs><LinearRing><coordinates>${ringToKmlCoords(r)}</coordinates></LinearRing></innerBoundaryIs>`).join('')}
+        </Polygon>
+      `;
+    }
+
+    function geojsonFeatureToKml(feature) {
+      const name = escapeXml(feature.properties?.name || 'Merged polygon');
+      let geometryPart = '';
+
+      if (feature.geometry.type === 'Polygon') {
+        geometryPart = polygonToKml(feature.geometry.coordinates);
+      } else if (feature.geometry.type === 'MultiPolygon') {
+        geometryPart = `
+          <MultiGeometry>
+            ${feature.geometry.coordinates.map(poly => polygonToKml(poly)).join('')}
+          </MultiGeometry>
+        `;
+      } else {
+        throw new Error(`Nem támogatott geometria exporthoz: ${feature.geometry.type}`);
+      }
+
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>${name}</name>
+    <Style id="mergedStyle">
+      <LineStyle><color>ff0000ff</color><width>3</width></LineStyle>
+      <PolyStyle><color>6600ff00</color></PolyStyle>
+    </Style>
+    <Placemark>
+      <name>${name}</name>
+      <styleUrl>#mergedStyle</styleUrl>
+      ${geometryPart}
+    </Placemark>
+  </Document>
+</kml>`;
+    }
+
+    function escapeXml(str) {
+      return String(str).replace(/[<>&'\"]/g, c => ({
+        '<': '&lt;',
+        '>': '&gt;',
+        '&': '&amp;',
+        "'": '&apos;',
+        '"': '&quot;'
+      })[c]);
+    }
+
+    function downloadMergedKml() {
+      if (!mergedKmlText) return;
+      const blob = new Blob([mergedKmlText], { type: 'application/vnd.google-earth.kml+xml' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'merged.kml';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function clearAll() {
+      features = [];
+      mergedFeature = null;
+      mergedKmlText = '';
+      downloadBtn.disabled = true;
+      renderList();
+      refreshMap();
+      updateStatus('Minden törölve.');
+    }
+
+    document.getElementById('selectAllBtn').addEventListener('click', () => {
+      const visible = features.filter(feature => {
+        if (!searchQuery) return true;
+        const hay = [
+          feature.properties.__displayName,
+          feature.properties.__file,
+          feature.properties.hrsz,
+          feature.properties.name,
+          feature.properties.Name,
+          feature.properties.NAME
+        ].filter(Boolean).join(' ').toLowerCase();
+        return hay.includes(searchQuery);
+      });
+      for (const f of visible) f.properties.__selected = true;
+      renderList();
+      refreshMap();
+    });
+
+    document.getElementById('selectNoneBtn').addEventListener('click', () => {
+      const visible = features.filter(feature => {
+        if (!searchQuery) return true;
+        const hay = [
+          feature.properties.__displayName,
+          feature.properties.__file,
+          feature.properties.hrsz,
+          feature.properties.name,
+          feature.properties.Name,
+          feature.properties.NAME
+        ].filter(Boolean).join(' ').toLowerCase();
+        return hay.includes(searchQuery);
+      });
+      for (const f of visible) f.properties.__selected = false;
+      renderList();
+      refreshMap();
+    });
+
+    document.getElementById('mergeBtn').addEventListener('click', mergeSelected);
+    document.getElementById('downloadBtn').addEventListener('click', downloadMergedKml);
+    document.getElementById('clearBtn').addEventListener('click', clearAll);
+
+    document.getElementById('searchInput').addEventListener('input', e => {
+      searchQuery = e.target.value.trim().toLowerCase();
+      renderList();
+    });
+
+    document.getElementById('sortSelect').addEventListener('change', e => {
+      sortMode = e.target.value;
+      renderList();
+    });
+
+    fileInput.addEventListener('change', e => handleFiles(e.target.files));
+
+    ['dragenter', 'dragover'].forEach(evt => {
+      dropzone.addEventListener(evt, e => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.add('dragover');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach(evt => {
+      dropzone.addEventListener(evt, e => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.remove('dragover');
+      });
+    });
+
+    dropzone.addEventListener('drop', e => {
+      handleFiles(e.dataTransfer.files);
+    });
+
+    map.on('zoomend', updateLabelVisibility);
+    map.whenReady(updateLabelVisibility);
+  </script>
+</body>
+</html>
