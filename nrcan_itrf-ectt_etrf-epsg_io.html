@@ -87,8 +87,9 @@
 	GRSxx ellipsoid used for (x,y,z) to (lat,lon,h) transformation"></textarea>
         <br>
         <button onclick="szamol()">1. Extract data!</button>
-        <form name="ecttform" method="post" action="https://www.epncb.oma.be/_productsservices/coord_trans/index.php">
+        <form name="ecttform" method="post" action="https://epncb.oma.be/_productsservices/coord_trans/">
             <input type="hidden" id="epochtype" name="epochtype" value='date'><br>
+            <input type="hidden" id="date" name="date" value="1"><br>
             <input type="hidden" id="from_frame_in" name="from_frame_in" value='ITRF2020'>
             <input type="hidden" id="from_epoch_date" name="from_epoch_date" value=''>
             <input type="hidden" id="to_frame_out" name="to_frame_out" value='ETRF2000'><br>

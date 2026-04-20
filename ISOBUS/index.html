@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ISOBUS eszközök – gunicsba</title>
+  <meta name="description" content="ISOBUS Task Controller, Virtual Terminal, driverek és beállítások." />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo" aria-hidden="true">AOG</div>
+      <div>
+        <h1 class="title">ISOBUS eszközök</h1>
+        <p class="subtitle">Task Controller, Virtual Terminal, driverek és beállítások – egy helyen.</p>
+      </div>
+    </header>
+
+    <section id="github" class="section-anchor">
+      <h2>Forráskód & GitHub<a class="anchor-link" href="#github">#</a></h2>
+      <div class="grid" id="grid-github">
+        <article class="card" data-tags="github task controller aog isobus source">
+          <a href="https://github.com/AgOpenGPS-Official/AOG-TaskController" target="_blank" rel="noopener">
+            <div class="kicker">GitHub</div>
+            <div class="name">AOG-TaskController</div>
+            <p>Task Controller implementáció AgOpenGPS-hez. Aktív fejlesztés, issue-k és PR-ek welcome!</p>
+            <div class="tag">TC</div>
+          </a>
+        </article>
+        <article class="card" data-tags="github virtual terminal vt isobus source">
+          <a href="https://github.com/Open-Agriculture/AgIsoVirtualTerminal" target="_blank" rel="noopener">
+            <div class="kicker">GitHub</div>
+            <div class="name">AgIsoVirtualTerminal</div>
+            <p>ISOBUS Virtual Terminal projekt. Teljes VT implementáció C++-ban.</p>
+            <div class="tag">VT</div>
+          </a>
+        </article>
+        <article class="card" data-tags="github isobus stack library source">
+          <a href="https://github.com/Open-Agriculture/AgIsoStack-plus-plus" target="_blank" rel="noopener">
+            <div class="kicker">GitHub</div>
+            <div class="name">AgIsoStack++</div>
+            <p>ISOBUS stack library C++-hoz. Alapvető ISOBUS kommunikációs réteg.</p>
+            <div class="tag">LIB</div>
+          </a>
+        </article>
+        <article class="card" data-tags="github gunicsba isobus source">
+          <a href="https://github.com/gunicsba/gunicsba.github.io/tree/main/ISOBUS" target="_blank" rel="noopener">
+            <div class="kicker">GitHub</div>
+            <div class="name">Saját ISOBUS fejlesztések</div>
+            <p>Forráskódok, jegyzetek és kísérletek ezen az oldalon.</p>
+            <div class="tag">MISC</div>
+          </a>
+        </article>
+      </div>
+    </section>
+
+    <section id="drivers" class="section-anchor">
+      <h2>Driverek<a class="anchor-link" href="#drivers">#</a></h2>
+      <div class="grid" id="grid-drivers">
+        <article class="card" data-tags="peak pcan driver download">
+          <a href="https://www.peak-system.com/Drivers.523.0.html?&L=1" target="_blank" rel="noopener">
+            <div class="kicker">Driver</div>
+            <div class="name">PEAK PCAN Driver</div>
+            <p>Hivatalos PEAK PCAN CAN adapter driver (Windows).</p>
+            <div class="tag">PEAK</div>
+          </a>
+        </article>
+        <article class="card" data-tags="ftdi rs232 driver download">
+          <a href="https://ftdichip.com/wp-content/uploads/2025/03/CDM2123620_Setup.zip" target="_blank" rel="noopener">
+            <div class="kicker">Driver</div>
+            <div class="name">FTDI RS232 Driver</div>
+            <p>USB-to-RS232 adapter driver (CDM2123620).</p>
+            <div class="tag">FTDI</div>
+          </a>
+        </article>
+      </div>
+    </section>
+
+    <section id="hardware" class="section-anchor">
+      <h2>Hardver<a class="anchor-link" href="#hardware">#</a></h2>
+      <div class="grid" id="grid-hardware">
+        <article class="card" data-tags="pcan adapter can aliexpress hardware">
+          <a href="https://www.aliexpress.com/item/1005006000190091.html" target="_blank" rel="noopener">
+            <div class="kicker">Hardver</div>
+            <div class="name">PCAN Adapter (AliExpress)</div>
+            <p>Olcsó PCAN adapter klón (~10$), PEAK PCAN kompatibilis.</p>
+            <div class="tag">CAN</div>
+          </a>
+        </article>
+        <article class="card" data-tags="cpc connector 9pin can hardware">
+          <a href="https://a.aliexpress.com/_EJtURj8" target="_blank" rel="noopener">
+            <div class="kicker">Hardver</div>
+            <div class="name">CPC 9-pin CAN csatlakozó</div>
+            <p>ISOBUS CPC csatlakozó traktorhoz.</p>
+            <div class="tag">CPC</div>
+          </a>
+        </article>
+        <article class="card" data-tags="rs232 adapter gps hardware">
+          <a href="https://www.aliexpress.com/item/1005006026595453.html" target="_blank" rel="noopener">
+            <div class="kicker">Hardver</div>
+            <div class="name">RS232 Adapter</div>
+            <p>GPS adatok lementéséhez traktorról.</p>
+            <div class="tag">RS232</div>
+          </a>
+        </article>
+      </div>
+    </section>
+
+    <section id="downloads" class="section-anchor">
+      <h2>Archív letöltések<a class="anchor-link" href="#downloads">#</a></h2>
+      <p style="color: var(--muted); margin-bottom: 16px;">Korábbi build-ek és archivált verziók. A legfrissebb verziókért nézd meg a GitHub repository-kat.</p>
+      <div class="grid" id="grid-downloads">
+        <article class="card compact" data-tags="task controller aog isobus download exe">
+          <a href="/ISOBUS/AOG-TaskController-1.3.3-win64.exe">
+            <div class="kicker">Task Controller</div>
+            <div class="name">AOG-TaskController v1.3.3</div>
+            <p>Legfrissebb stabil verzió (win64).</p>
+          </a>
+        </article>
+        <article class="card compact" data-tags="task controller aog isobus download exe legacy">
+          <a href="/ISOBUS/AOG-TaskController-1.3.2-win64.exe">
+            <div class="kicker">Task Controller</div>
+            <div class="name">AOG-TaskController v1.3.2</div>
+            <p>Előző stabil verzió (win64).</p>
+          </a>
+        </article>
+        <article class="card compact" data-tags="task controller aog isobus download exe legacy">
+          <a href="/ISOBUS/AOG-TaskController-1.3.1-win64.exe">
+            <div class="kicker">Task Controller</div>
+            <div class="name">AOG-TaskController v1.3.1</div>
+            <p>Korábbi verzió (win64).</p>
+          </a>
+        </article>
+        <article class="card compact" data-tags="task controller aog isobus download exe legacy">
+          <a href="/ISOBUS/AOG-TaskController-1.3.0-win64.exe">
+            <div class="kicker">Task Controller</div>
+            <div class="name">AOG-TaskController v1.3.0</div>
+            <p>Korábbi verzió (win64).</p>
+          </a>
+        </article>
+        <article class="card compact" data-tags="virtual terminal vt isobus download zip">
+          <a href="/ISOBUS/AgISOVirtualTerminal_20250913.zip">
+            <div class="kicker">Virtual Terminal</div>
+            <div class="name">AgISOVirtualTerminal (2025.09.13)</div>
+            <p>ISOBUS Virtual Terminal implementáció.</p>
+          </a>
+        </article>
+        <article class="card compact" data-tags="virtual terminal vt isobus download zip legacy">
+          <a href="/ISOBUS/AgISOVirtualTerminal_20250725.zip">
+            <div class="kicker">Virtual Terminal</div>
+            <div class="name">AgISOVirtualTerminal (2025.07.25)</div>
+            <p>Korábbi VT verzió.</p>
+          </a>
+        </article>
+        <article class="card compact" data-tags="agopengps isobus beta download zip">
+          <a href="/ISOBUS/AgOpenGPS_develop_20251121.zip">
+            <div class="kicker">AgOpenGPS</div>
+            <div class="name">AgOpenGPS ISOBUS Beta (2025.11.21)</div>
+            <p>Fejlesztői verzió ISOBUS támogatással.</p>
+          </a>
+        </article>
+        <article class="card compact" data-tags="agopengps isobus beta download zip legacy">
+          <a href="/ISOBUS/AgOpenGPS%20-%20isobus%20beta7.zip">
+            <div class="kicker">AgOpenGPS</div>
+            <div class="name">AgOpenGPS ISOBUS Beta 7</div>
+            <p>Korábbi ISOBUS béta verzió.</p>
+          </a>
+        </article>
+      </div>
+    </section>
+
+    <section id="docs" class="section-anchor">
+      <h2>Dokumentáció<a class="anchor-link" href="#docs">#</a></h2>
+      <div class="grid" id="grid-docs">
+        <article class="card" data-tags="readme documentation setup config">
+          <a href="/ISOBUS/README.md">
+            <div class="kicker">Doksi</div>
+            <div class="name">ISOBUS README</div>
+            <p>Hardver igények, beállítások és kompatibilitási lista.</p>
+          </a>
+        </article>
+        <article class="card" data-tags="script bash pcan setup">
+          <a href="/ISOBUS/peak.sh">
+            <div class="kicker">Script</div>
+            <div class="name">PEAK setup script</div>
+            <p>Linux PEAK PCAN beállítás script.</p>
+          </a>
+        </article>
+        <article class="card" data-tags="script bash vcan virtual can setup">
+          <a href="/ISOBUS/vcan_setup.sh">
+            <div class="kicker">Script</div>
+            <div class="name">vCAN setup script</div>
+            <p>Virtual CAN interfész beállítás Linuxon.</p>
+          </a>
+        </article>
+      </div>
+    </section>
+
+    <section id="compatibility" class="section-anchor">
+      <h2>Kompatibilitás<a class="anchor-link" href="#compatibility">#</a></h2>
+      <div class="card" style="padding: 16px 20px;">
+        <h3 style="margin-top: 0;">Tesztelt eszközök</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+          <div>
+            <h4 style="color: var(--accent); margin-bottom: 8px;">✓ Működik</h4>
+            <ul style="margin: 0; padding-left: 18px; color: var(--muted);">
+              <li>Monosem</li>
+              <li>Kverneland</li>
+              <li>KUHN</li>
+              <li>Amazone</li>
+              <li>Berthoud ecTronic</li>
+              <li>Müller MIDI sprayer</li>
+              <li>Vaderstad Tempo</li>
+              <li>John Deere Sprayer</li>
+            </ul>
+          </div>
+          <div>
+            <h4 style="color: #ff6b6b; margin-bottom: 8px;">✗ Nem működik</h4>
+            <ul style="margin: 0; padding-left: 18px; color: var(--muted);">
+            </ul>
+          </div>
+          <div>
+            <h4 style="color: #ffd93d; margin-bottom: 8px;">? Ismeretlen</h4>
+            <ul style="margin: 0; padding-left: 18px; color: var(--muted);">
+              <li>Gaspardo spreader TC</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="troubleshooting" class="section-anchor">
+      <h2>Hibaelhárítás<a class="anchor-link" href="#troubleshooting">#</a></h2>
+      <div class="card" style="padding: 16px 20px;">
+        <h4 style="margin-top: 0;">Task Controller nem indul?</h4>
+        <p style="color: var(--muted);">Próbáld meg parancssorból indítani debug módban:</p>
+        <pre style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; overflow-x: auto; font-size: 13px;"><code>C:\"Program Files"\AOG-TaskController\bin\AOG-TaskController.exe --can_adapter=PEAK-PCAN --can_channel=2 --log_level=debug --log2file</code></pre>
+        <p style="color: var(--muted); margin-top: 12px; font-size: 13px;">
+          <strong>Megjegyzés:</strong> A VT mindig adapter 1. A TC lehet adapter 2, vagy ha 2 tablet van, akkor adapter 1.<br>
+          Ha több TC van jelen, mi vagyunk a #0, szóval a többieknek magasabb számot kell választaniuk.
+        </p>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <div class="links">
+        <a href="/">← Vissza a főoldalra</a>
+      </div>
+      <div class="links">
+        <a href="https://github.com/gunicsba/gunicsba.github.io" target="_blank" rel="noopener">Forrás a GitHubon</a>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    document.querySelectorAll('.anchor-link').forEach(link => {
+      link.addEventListener('click', e => {
+        e.preventDefault();
+        const url = window.location.origin + window.location.pathname + link.getAttribute('href');
+        navigator.clipboard.writeText(url);
+        link.textContent = '✓';
+        setTimeout(() => link.textContent = '#', 900);
+      });
+    });
+  </script>
+</body>
+</html>
