@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Section Control – AgOpenGPS</title>
+  <meta name="description" content="Section Control solutions for AgOpenGPS: ISOBUS, RS232, CAN and hardware mods." />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo" aria-hidden="true">SC</div>
+      <div>
+        <h1 class="title">Section Control</h1>
+        <p class="subtitle">Control your implement sections automatically with AgOpenGPS &mdash; via ISOBUS, RS232, CAN or hardware mods.</p>
+      </div>
+    </header>
+
+    <section id="overview" class="section-anchor">
+      <h2>What is Section Control?<a class="anchor-link" href="#overview">#</a></h2>
+      <div class="card" style="padding: 16px 20px;">
+        <p style="color: var(--muted); margin: 0;">
+          Section Control allows AgOpenGPS to automatically turn on/off individual sections of your implement (sprayer booms, planter rows, spreader sections) based on your field boundary and already-covered area. This eliminates overlap and skip, saving inputs and money.
+        </p>
+        <p style="color: var(--muted); margin: 12px 0 0;">
+          There are multiple ways to connect your implement to AgOpenGPS for section control. Choose the method that matches your equipment:
+        </p>
+        <ul style="color: var(--muted); margin: 8px 0 0; padding-left: 18px;">
+          <li><strong>ISOBUS (ISO 11783)</strong> &ndash; Modern implements with ISOBUS Task Controller support</li>
+          <li><strong>RS232</strong> &ndash; Older rate controllers that accept serial commands</li>
+          <li><strong>CAN</strong> &ndash; Direct CAN bus communication for specific brands</li>
+          <li><strong>Hardware mods</strong> &ndash; Relay-based or direct wiring modifications</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="isobus" class="section-anchor">
+      <h2>ISOBUS<a class="anchor-link" href="#isobus">#</a></h2>
+      <p style="color: var(--muted); margin-bottom: 12px;">
+        The standard way. AgOpenGPS acts as an ISOBUS Task Controller and sends section commands over the CAN bus to any ISOBUS-compliant implement. Requires a PCAN adapter.
+      </p>
+      <div class="grid">
+        <article class="card" data-tags="isobus task controller aog official">
+          <a href="https://github.com/AgOpenGPS-Official/AOG-TaskController" target="_blank" rel="noopener">
+            <div class="kicker">ISOBUS</div>
+            <div class="name">AOG-TaskController</div>
+            <p>Official ISOBUS Task Controller for AgOpenGPS. Controls sections on any ISOBUS implement via PCAN adapter.</p>
+            <div class="tag">TC</div>
+          </a>
+        </article>
+        <article class="card" data-tags="isobus hardware setup guide">
+          <a href="/ISOBUS/">
+            <div class="kicker">Guide</div>
+            <div class="name">ISOBUS Setup & Downloads</div>
+            <p>Hardware requirements, drivers, downloads and compatibility list for ISOBUS section control.</p>
+            <div class="tag">SETUP</div>
+          </a>
+        </article>
+      </div>
+      <div class="card" style="padding: 16px 20px; margin-top: 14px;">
+        <h4 style="margin-top: 0; color: var(--accent);">Tested & Working</h4>
+        <p style="color: var(--muted); margin: 0; font-size: 14px;">
+          Monosem, Kverneland, KUHN, Amazone, Berthoud ecTronic, M&uuml;ller MIDI sprayer, Vaderstad Tempo, John Deere Sprayer
+        </p>
+      </div>
+    </section>
+
+    <section id="rs232" class="section-anchor">
+      <h2>RS232 (Serial)<a class="anchor-link" href="#rs232">#</a></h2>
+      <p style="color: var(--muted); margin-bottom: 12px;">
+        For older rate controllers and implements that accept serial RS232 commands. These bridges translate AgOpenGPS section commands into the proprietary serial protocol of your controller.
+      </p>
+      <div class="grid">
+        <article class="card" data-tags="rs232 bogballe bridge serial">
+          <a href="https://github.com/charlesquick/AOG-Bogballe-Bridge" target="_blank" rel="noopener">
+            <div class="kicker">RS232</div>
+            <div class="name">AOG-Bogballe-Bridge</div>
+            <p>Section control bridge for Bogballe spreaders via RS232 serial connection.</p>
+            <div class="tag">BOGBALLE</div>
+          </a>
+        </article>
+        <article class="card" data-tags="rs232 tuvr bridge serial">
+          <a href="https://github.com/gunicsba/AOG_TUVR_bridge/" target="_blank" rel="noopener">
+            <div class="kicker">RS232</div>
+            <div class="name">AOG_TUVR_bridge</div>
+            <p>Bridge for T&Uuml;VR (Hungarian) rate controllers. Translates AOG commands to serial protocol.</p>
+            <div class="tag">TUVR</div>
+          </a>
+        </article>
+        <article class="card" data-tags="rs232 agtronik bridge serial">
+          <a href="https://github.com/gunicsba/AOG_AGTronik_bridge/" target="_blank" rel="noopener">
+            <div class="kicker">RS232</div>
+            <div class="name">AOG_AGTronik_bridge</div>
+            <p>Bridge for AGTronik rate controllers. Enables section control via serial communication.</p>
+            <div class="tag">AGTRONIK</div>
+          </a>
+        </article>
+      </div>
+    </section>
+
+    <section id="can" class="section-anchor">
+      <h2>CAN (Direct)<a class="anchor-link" href="#can">#</a></h2>
+      <p style="color: var(--muted); margin-bottom: 12px;">
+        Direct CAN bus communication for brand-specific section control, bypassing the ISOBUS Task Controller layer. Useful when the implement doesn't fully support ISOBUS TC but does respond to specific CAN messages.
+      </p>
+      <div class="grid">
+        <article class="card" data-tags="can amazone section control direct">
+          <a href="https://github.com/gunicsba/AOG_Amazone_CAN_SectionControl" target="_blank" rel="noopener">
+            <div class="kicker">CAN</div>
+            <div class="name">AOG_Amazone_CAN_SectionControl</div>
+            <p>Direct CAN section control for Amazone sprayers. Sends section on/off commands directly on the CAN bus.</p>
+            <div class="tag">AMAZONE</div>
+          </a>
+        </article>
+      </div>
+    </section>
+
+    <section id="hardware" class="section-anchor">
+      <h2>Hardware Mods<a class="anchor-link" href="#hardware">#</a></h2>
+      <p style="color: var(--muted); margin-bottom: 12px;">
+        Physical hardware modifications for section control when no digital interface is available. Typically involves intercepting or replacing valve drivers with relay boards controlled by AgOpenGPS.
+      </p>
+      <div class="grid">
+        <article class="card" data-tags="hardware mod amaspray relay wiring">
+          <a href="https://github.com/gunicsba/AOG_Amaspray" target="_blank" rel="noopener">
+            <div class="kicker">Hardware</div>
+            <div class="name">AOG_Amaspray</div>
+            <p>Hardware modification for Amazone Amaspray section control. Relay-based section switching with wiring diagrams.</p>
+            <div class="tag">MOD</div>
+          </a>
+        </article>
+      </div>
+    </section>
+
+    <section id="choosing" class="section-anchor">
+      <h2>Which method should I use?<a class="anchor-link" href="#choosing">#</a></h2>
+      <div class="card" style="padding: 16px 20px;">
+        <table style="width: 100%; border-collapse: collapse; color: var(--muted); font-size: 14px;">
+          <thead>
+            <tr style="border-bottom: 1px solid rgba(148,163,184,.18); text-align: left;">
+              <th style="padding: 8px 8px 8px 0; color: var(--text);">Method</th>
+              <th style="padding: 8px; color: var(--text);">Best for</th>
+              <th style="padding: 8px; color: var(--text);">Requires</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom: 1px solid rgba(148,163,184,.08);">
+              <td style="padding: 8px 8px 8px 0; font-weight: 600; color: var(--text);">ISOBUS</td>
+              <td style="padding: 8px;">Modern implements with ISOBUS socket</td>
+              <td style="padding: 8px;">PCAN adapter + CPC connector</td>
+            </tr>
+            <tr style="border-bottom: 1px solid rgba(148,163,184,.08);">
+              <td style="padding: 8px 8px 8px 0; font-weight: 600; color: var(--text);">RS232</td>
+              <td style="padding: 8px;">Older controllers (Bogballe, TUVR, AGTronik)</td>
+              <td style="padding: 8px;">USB-RS232 adapter + custom bridge firmware</td>
+            </tr>
+            <tr style="border-bottom: 1px solid rgba(148,163,184,.08);">
+              <td style="padding: 8px 8px 8px 0; font-weight: 600; color: var(--text);">CAN</td>
+              <td style="padding: 8px;">Brand-specific direct control</td>
+              <td style="padding: 8px;">PCAN adapter + brand-specific software</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 8px 8px 0; font-weight: 600; color: var(--text);">Hardware</td>
+              <td style="padding: 8px;">No digital interface available</td>
+              <td style="padding: 8px;">Relay board + wiring work</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <div class="links">
+        <a href="/">&larr; Back to main page</a>
+      </div>
+      <div class="links">
+        <a href="https://github.com/gunicsba/gunicsba.github.io" target="_blank" rel="noopener">Source on GitHub</a>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    document.querySelectorAll('.anchor-link').forEach(link => {
+      link.addEventListener('click', e => {
+        e.preventDefault();
+        const url = window.location.origin + window.location.pathname + link.getAttribute('href');
+        navigator.clipboard.writeText(url);
+        link.textContent = '\u2713';
+        setTimeout(() => link.textContent = '#', 900);
+      });
+    });
+  </script>
+</body>
+</html>

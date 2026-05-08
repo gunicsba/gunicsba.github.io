@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OENY HRSZ shape-zip letöltő – Userscript</title>
+  <meta name="description" content="OENY HRSZ kereső shape-zip letöltő userscript. Mivel az OENY letiltotta a közvetlen WFS hozzáférést, ez a script kiszedi a BBOX-ot a térkép hálózati kéréseiből." />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/styles.css">
+  <style>
+    .screenshot { border-radius: 12px; border: 1px solid #1f2937; max-width: 100%; height: auto; }
+    .step-num { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:var(--accent,#22c55e); color:#fff; font-weight:800; font-size:14px; margin-right:10px; }
+    .step { display:flex; align-items:flex-start; gap:8px; margin:14px 0; }
+    .step-body { flex:1; }
+    code { background:#0b1220; padding:2px 6px; border-radius:6px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:.92em; }
+    pre code { display:block; padding:12px; overflow:auto; }
+    .tag { display:inline-block; padding:3px 10px; border-radius:999px; background:#1f2937; color:#9ca3af; font-size:12px; font-weight:700; margin-top:8px; }
+    .warn { background:rgba(245,158,11,.12); border:1px solid rgba(245,158,11,.35); color:#fbbf24; padding:12px 14px; border-radius:12px; }
+    .ok  { background:rgba(34,197,94,.12); border:1px solid rgba(34,197,94,.35); color:#86efac; padding:12px 14px; border-radius:12px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo" aria-hidden="true">OENY</div>
+      <div>
+        <h1 class="title">OENY HRSZ shape-zip letöltő</h1>
+        <p class="subtitle">Userscript, amivel továbbra is le tudod tölteni a földrészleteket shape-ként — az OENY WFS blokkolása ellenére.</p>
+      </div>
+    </header>
+
+    <section class="section-anchor">
+      <h2>Mi történt?<a class="anchor-link" href="#">#</a></h2>
+      <div class="card" style="padding: 16px 20px;">
+        <p style="color: var(--muted); margin: 0;">
+          Az <strong>OENY (Országos Egyedi Nyereségfelügyelet)</strong> letiltotta a közvetlen WFS API hozzáférést a <code>hrsz:foldreszlet</code> réteghez.
+          Ezért a korábbi „BBOX-ból WFS link” megoldás már nem működik.
+        </p>
+        <p style="color: var(--muted); margin: 12px 0 0;">
+          A <strong>userscript</strong> workaround: a térkép betöltésekor a böngésző hálózati kéréseiből automatikusan kiszedi a BBOX-ot,
+          és abból épít egy letöltési linket — mintha mi sem történt volna.
+        </p>
+      </div>
+    </section>
+
+    <section class="section-anchor">
+      <h2>Telepítés lépésről lépésre<a class="anchor-link" href="#">#</a></h2>
+      <div class="card" style="padding: 16px 20px;">
+
+        <div class="step">
+          <span class="step-num">1</span>
+          <div class="step-body">
+            <strong>Telepítsd a Tampermonkey-t</strong>
+            <p style="color: var(--muted); margin: 4px 0 0;">A scriptet <strong>Google Chrome</strong>-ban teszteltük. Töltsd le a bőngésződhöz való verziót:</p>
+            <div style="margin-top:10px;">
+              <a class="btn" href="https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo" target="_blank" rel="noopener">Tampermonkey – Chrome Web Store</a>
+            </div>
+            <p style="color: var(--muted); margin: 8px 0 0; font-size: 13px;">Egyéb böngészőkhöz: <a href="https://www.tampermonkey.net/" target="_blank" rel="noopener">tampermonkey.net</a></p>
+          </div>
+        </div>
+
+        <div class="step">
+          <span class="step-num">2</span>
+          <div class="step-body">
+            <strong>Telepítsd a scriptet</strong>
+            <p style="color: var(--muted); margin: 4px 0 0;">Kattints a lenti gombra, és a kezelő automatikusan felismeri:</p>
+            <div style="margin-top:10px;">
+              <a class="btn" href="https://greasyfork.org/en/scripts/572558-oeny-hrsz-shape-zip-downloader-compact" target="_blank" rel="noopener">Script telepítése GreasyFork-ról</a>
+              <span style="margin-left:8px; color:var(--muted);">vagy</span>
+              <a class="btn secondary" href="/OENY_HRSZ_shape-zip_downloader.user.js" target="_blank">Helyi .user.js megnyitása</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <span class="step-num">3</span>
+          <div class="step-body">
+            <strong>Nyisd meg az OENY HRSZ keresőt</strong>
+            <p style="color: var(--muted); margin: 4px 0 0;">Menj a <a href="https://www.oeny.hu/oeny/hrsz-kereso/" target="_blank" rel="noopener">www.oeny.hu/oeny/hrsz-kereso/</a> oldalra. A script csak itt fut le (Google Chrome-ban tesztelve).</p>
+          </div>
+        </div>
+
+        <div class="step">
+          <span class="step-num">4</span>
+          <div class="step-body">
+            <strong>Keresd meg a kívánt területet</strong>
+            <p style="color: var(--muted); margin: 4px 0 0;">Mozgasd/nagyítsd a térképet úgy, hogy a kívánt földrészletek látszódjanak. A script automatikusan elfogja a BBOX-ot a hálózati kérésekből.</p>
+            <div class="ok" style="margin-top:10px;">Ha a panelen <em>"BBOX captured"</em> jelenik meg, készen állsz a letöltésre.</div>
+          </div>
+        </div>
+
+        <div class="step">
+          <span class="step-num">5</span>
+          <div class="step-body">
+            <strong>Töltsd le a shape-zip fájlt</strong>
+            <p style="color: var(--muted); margin: 4px 0 0;">A jobb alsó sarokban megjelenő panelen nyomd meg a <strong>Download shape-zip</strong> gombot. Szükség esetén állítsd az <strong>Overscale</strong> értéket (1–10×), ha nagyobb területet akarsz letölteni.</p>
+          </div>
+        </div>
+
+        <div class="step">
+          <span class="step-num">6</span>
+          <div class="step-body">
+            <strong>Konvertáld KML-be (opcionális)</strong>
+            <p style="color: var(--muted); margin: 4px 0 0;">A panelen az <strong>Open EOV converter</strong> gomb megnyitja a shape → KML konvertert, ha AgOpenGPS-ben szeretnéd használni a területeket.</p>
+            <a class="btn secondary" href="/shape_kml.html" style="margin-top:8px;">Shape (EOV) → KML konverter</a>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <section class="section-anchor">
+      <h2>Képernyőképek<a class="anchor-link" href="#">#</a></h2>
+      <div class="grid" id="grid-photos">
+        <article class="card">
+          <img src="/img/oeny_hrsz_1.jpg" alt="OENY HRSZ script panel - BBOX captured állapot" class="screenshot" />
+          <p style="color: var(--muted); margin-top: 10px; text-align:center;">A script panel az OENY oldalon — BBOX sikeresen elfogva.</p>
+        </article>
+        <article class="card">
+          <img src="/img/oeny_hrsz_2.jpg" alt="OENY HRSZ script panel - letöltés és konvertálás" class="screenshot" />
+          <p style="color: var(--muted); margin-top: 10px; text-align:center;">Letöltés és EOV konverter link a panelen.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section-anchor">
+      <h2>Technikai részletek<a class="anchor-link" href="#">#</a></h2>
+      <div class="card" style="padding: 16px 20px;">
+        <p style="color: var(--muted); margin: 0;">A script a következőket figyeli a háttérben:</p>
+        <ul style="color: var(--muted); margin: 8px 0;">
+          <li><code>fetch()</code> kérések URL-jeit</li>
+          <li><code>XMLHttpRequest</code> nyitott kapcsolatait</li>
+          <li><code>&lt;img&gt;</code> és <code>&lt;iframe&gt;</code> <code>src</code> attribútumait</li>
+          <li>DOM változásokat (MutationObserver)</li>
+          <li>PerformanceObserver resource bejegyzéseket</li>
+        </ul>
+        <p style="color: var(--muted); margin: 0;">Amint egy URL tartalmazza a <code>BBOX=</code> paramétert, a script kinyeri, tárolja, és felkészíti a WFS shape-zip link generálásához.</p>
+        <div class="warn" style="margin-top:12px;">
+          <strong>Fontos:</strong> A script csak a böngésződben fut. Semmilyen adatot nem küld harmadik félnek — a letöltési link közvetlenül az OENY szerverére mutat, a te gépedről.
+        </div>
+      </div>
+    </section>
+
+    <section class="section-anchor">
+      <h2>Forráskód<a class="anchor-link" href="#">#</a></h2>
+      <div class="card" style="padding: 16px 20px;">
+        <p style="color: var(--muted); margin: 0 0 10px;">A teljes forráskód elérhető a repo-ban:</p>
+        <a class="btn secondary" href="/OENY_HRSZ_shape-zip_downloader.user.js" target="_blank">OENY_HRSZ_shape-zip_downloader.user.js megtekintése</a>
+      </div>
+    </section>
+
+    <footer class="foot" style="margin-top: 24px;">
+      <div class="links"><a href="/">Vissza a főoldalra</a></div>
+    </footer>
+  </div>
+
+  <script>
+    document.querySelectorAll('.anchor-link').forEach(link => {
+      link.addEventListener('click', e => {
+        e.preventDefault();
+        const url = window.location.origin + window.location.pathname + link.getAttribute('href');
+        navigator.clipboard.writeText(url);
+        link.textContent = '✓';
+        setTimeout(() => link.textContent = '#', 900);
+      });
+    });
+  </script>
+</body>
+</html>
