@@ -72,9 +72,7 @@
       const bboxStr = `${toFixed(minx)},${toFixed(miny)},${toFixed(maxx)},${toFixed(maxy)}`;
       qs('bbox').textContent = bboxStr;
       const cx = (minx+maxx)/2, cy = (miny+maxy)/2;
-      qs('eov').textContent = `EOV (EPSG:23700)
-X: ${toFixed(cx)}
-Y: ${toFixed(cy)}`;
+      qs('eov').textContent = `EOV (EPSG:23700)\nX: ${toFixed(cx)}\nY: ${toFixed(cy)}`;
 
       // w/h mezők frissítése (EOV méterben)
       qs('w').value = Math.max(1, Math.round(maxx-minx));
