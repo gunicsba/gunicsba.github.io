@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Drivers &ndash; AgOpenGPS</title>
+  <meta name="description" content="Driver downloads for AgOpenGPS hardware: PCAN (PEAK-System) and FTDI USB-Serial." />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo" aria-hidden="true">DRV</div>
+      <div>
+        <h1 class="title">Drivers</h1>
+        <p class="subtitle">Drivers you usually need for AgOpenGPS hardware &mdash; PCAN adapters and USB-Serial adapters.</p>
+      </div>
+    </header>
+
+    <section id="overview" class="section-anchor">
+      <h2>What you need<a class="anchor-link" href="#overview">#</a></h2>
+      <div class="card" style="padding: 16px 20px;">
+        <p style="color: var(--muted); margin: 0;">
+          Most AgOpenGPS setups talk to the tractor or implement through one of two interfaces:
+        </p>
+        <ul style="color: var(--muted); margin: 8px 0 0; padding-left: 18px;">
+          <li><strong>PCAN (PEAK-System)</strong> &ndash; USB-to-CAN adapter required for ISOBUS Task Controller, direct-CAN section control and most CAN-based steering integrations.</li>
+          <li><strong>FTDI USB-Serial</strong> &ndash; Needed for almost every USB-to-RS232 adapter used by serial section-control bridges (TUVR, AGTronik, Bogballe, Hardi, ASD) and some GNSS receivers.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="pcan" class="section-anchor">
+      <h2>PCAN (PEAK-System)<a class="anchor-link" href="#pcan">#</a></h2>
+      <p style="color: var(--muted); margin-bottom: 12px;">
+        Official driver package for PEAK-System PCAN-USB adapters (and clones that use the same chipset). Required by the AOG Task Controller, Virtual Terminal and most CAN tools on Windows.
+      </p>
+      <div class="grid">
+        <article class="card" data-tags="pcan peak driver can usb">
+          <a href="https://www.peak-system.com/Drivers.523.0.html?&L=1" target="_blank" rel="noopener">
+            <div class="kicker">Driver</div>
+            <div class="name">PEAK-System PCAN drivers (official)</div>
+            <p>Download page for the PEAK-System device driver setup (Windows). Pick the latest "Device Driver Setup for Windows".</p>
+            <div class="tag">PCAN</div>
+            <div class="tag">CAN</div>
+          </a>
+        </article>
+      </div>
+    </section>
+
+    <section id="ftdi" class="section-anchor">
+      <h2>FTDI USB-Serial<a class="anchor-link" href="#ftdi">#</a></h2>
+      <p style="color: var(--muted); margin-bottom: 12px;">
+        FTDI CDM driver for FT232 / FT2232 / FT4232-based USB-to-Serial adapters. Install this if Windows does not recognise your USB-RS232 dongle, or if the COM port disappears.
+      </p>
+      <div class="grid">
+        <article class="card" data-tags="ftdi cdm driver usb serial rs232">
+          <a href="https://ftdichip.com/wp-content/uploads/2025/03/CDM2123620_Setup.zip" target="_blank" rel="noopener">
+            <div class="kicker">Driver</div>
+            <div class="name">FTDI CDM 2.12.36.20 Setup (.zip)</div>
+            <p>FTDI Combined Driver Model installer for Windows. Unzip and run the executable as Administrator.</p>
+            <div class="tag">FTDI</div>
+            <div class="tag">USB-Serial</div>
+          </a>
+        </article>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <div class="links">
+        <a href="/">&larr; Back to main page</a>
+        &middot;
+        <a href="/sectioncontrol.html">Section Control</a>
+        &middot;
+        <a href="/ISOBUS/">ISOBUS</a>
+      </div>
+      <div class="links">
+        <a href="https://github.com/gunicsba/gunicsba.github.io" target="_blank" rel="noopener">Source on GitHub</a>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    document.querySelectorAll('.anchor-link').forEach(link => {
+      link.addEventListener('click', e => {
+        e.preventDefault();
+        const url = window.location.origin + window.location.pathname + link.getAttribute('href');
+        navigator.clipboard.writeText(url);
+        link.textContent = '\u2713';
+        setTimeout(() => link.textContent = '#', 900);
+      });
+    });
+  </script>
+</body>
+</html>
