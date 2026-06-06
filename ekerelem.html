@@ -198,6 +198,7 @@ function szamol(){
 		htmltext += "<td><textarea id='WGS84OUT"+i+"' cols='30'></textarea></td>";
 		htmltext += '<td><input type = "button" onclick = "downloadAsKML('+i+')" value = "KML">';
 		htmltext += '<input type = "button" onclick = "downloadAsWGS84SHP('+i+')" value = "WGS84 Shape">';
+		htmltext += '<input type = "button" onclick = "downloadAsWGS84SHPWithInner('+i+')" value = "WGS84 Shape (Inner)">';
 		htmltext += '<input type = "button" onclick = "displayField('+i+')" value = "Megjelenit"><input type = "button" onclick = "egyesit('+i+')" value = "Kombinalt"></td>';
 		htmltext +="</tr>";
 		i++;
@@ -552,6 +553,69 @@ async function downloadAsWGS84SHP(j) {
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
   link.download = 'wgs84_'+fileName+'.zip';
+  link.click();
+
+  // Clean up the object URL
+  URL.revokeObjectURL(link.href);
+}
+
+async function downloadAsWGS84SHPWithInner(j) {
+  var content = document.getElementById('WGS84OUT'+j).value;
+  // Split by parentheses to separate outer and inner boundaries
+  var boundaries = content.split(/[()]/).filter(b => b.trim().length > 10);
+  
+  const geojson = {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": []
+          },
+          "properties": {
+            "name": "TODO teszt"
+          }
+        }
+      ]
+    };
+  geojson.features[0].properties.name = document.getElementById('foldnev'+j).value;
+  
+  // Process each boundary (first is outer, rest are inner/holes)
+  for(var b = 0; b < boundaries.length; b++) {
+    var lines = boundaries[b].trim().split("\n");
+    var jsonArray = [];
+    
+    for(var i = 0; i <= lines.length; i++){
+      if( lines[i] == undefined || lines[i].length < 10) continue;
+      if(i != lines.length){
+        var splitby = ',';
+        var wgs = lines[i].split(splitby);
+        var obj = [];
+        obj.push(Number(wgs[0]));
+        obj.push(Number(wgs[1]));
+        jsonArray.push(obj);
+      }
+    }
+    // Close the polygon by adding the first point at the end
+    if(jsonArray.length > 0) {
+      jsonArray.push(jsonArray[0]);
+      geojson.features[0].geometry.coordinates.push(jsonArray);
+    }
+  }
+
+  const fileName = document.getElementById('foldnev'+j).value;
+  
+  console.log(JSON.stringify(geojson));
+  // Convert GeoJSON to Shapefile (ZIP format)
+  const shapefileBase64 = await shpwrite.zip(geojson, {folder: 'wgs84_'+fileName+'_inner', types: {polygon: fileName+'_inner', point: fileName+'_inner', polyline: fileName+'_inner'}});
+  // Decode the Base64 content to binary
+  const shapefileBinary = base64ToArrayBuffer(shapefileBase64);
+  // Create a download link and trigger the download
+  const blob = new Blob([shapefileBinary], { type: 'application/zip' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'wgs84_'+fileName+'_inner.zip';
   link.click();
 
   // Clean up the object URL
