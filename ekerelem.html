@@ -207,9 +207,9 @@ function szamol(){
 		console.log(terulet.polygon);
 		// Display outer boundary
 		htmltext += terulet.polygon.join("\n");
-		// Display inner boundaries with comma separator
+		// Display inner boundaries with comma separator on its own line
 		for(let inner of terulet.innerPolygons) {
-			htmltext += "\n,";
+			htmltext += "\n,\n";
 			htmltext += inner.join("\n");
 		}
 		htmltext += "</textarea></td>";
