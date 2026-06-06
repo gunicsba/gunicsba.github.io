@@ -274,10 +274,11 @@ function displayField1(){
 }
 
 function displayField(j){
-	var coordinates = document.getElementById('WGS84OUT'+j).value.replaceAll(",0","").split("\n");
+	var coordinates = document.getElementById('WGS84OUT'+j).value.replaceAll(",0","").replaceAll("(","").replaceAll(")","").split("\n");
 	var data = "[";
 	for(var i = 0; i <= coordinates.length;i++){
 		if(String(coordinates[i]).length < 10) continue;
+		if(coordinates[i].trim() === ',') break; // Stop at separator line, ignore inner boundaries
 		if(data.length > 5) data += ',';
 		data += '[' + coordinates[i] + ']';
 	}
@@ -446,10 +447,11 @@ const element = document.createElement('a');
 var datacsv = document.getElementById('WGS84OUT'+i).value;
 console.log(datacsv);
 if(s){
-	var coordinates = String(datacsv).split("\n");
+	var coordinates = String(datacsv).replaceAll("(","").replaceAll(")","").split("\n");
 	var data = "[";
 	for(var j = 0; j <= coordinates.length;j++){
 		if(String(coordinates[j]).length < 10) continue;
+		if(coordinates[j].trim() === ',') break; // Stop at separator line, ignore inner boundaries
 		if(data.length > 5) data += ',';
 		data += '[' + coordinates[j] + ']';
 	}
@@ -468,8 +470,21 @@ if(s){
 		datacsv += terulet[j][1];
 		datacsv += ',0 ';
 	}
+} else {
+	// For non-simplified version, stop at first comma separator
+	var lines = datacsv.split("\n");
+	datacsv = "";
+	for(var j = 0; j < lines.length; j++){
+		if(lines[j].trim() === ',' || lines[j].trim() === ', ') break; // Stop at separator
+		datacsv += lines[j] + '\n';
+	}
 }
-datacsv = datacsv.replaceAll('\n',' ');
+// Remove parentheses and normalize for KML output
+datacsv = datacsv.replaceAll('(','').replaceAll(')','').replaceAll('\n',' ');
+// Remove multiple spaces and normalize separators
+datacsv = datacsv.replace(/\s+/g, ' ').trim();
+// Remove trailing commas before closing tags
+datacsv = datacsv.replace(/,\s*</g, '<');
 
 console.log(document.getElementById('foldnev'+i));
 
@@ -527,6 +542,10 @@ async function downloadAsWGS84SHP(j) {
   geojson.features[0].properties.name = document.getElementById('foldnev'+j).value;
   var jsonArray = [];
   for(var i = 0; i <= lines.length;i++){
+    // Skip parentheses
+    if( lines[i].trim() === '(' || lines[i].trim() === ')') continue;
+    // Stop processing at comma separator - ignore inner boundaries
+    if( lines[i].trim() === ',' || lines[i].trim() === ', ') break;
     if( lines[i] == undefined || lines[i].length < 10) continue;
     if(i != lines.length){
       var splitby  = ',';
