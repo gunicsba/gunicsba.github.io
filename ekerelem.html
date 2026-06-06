@@ -158,8 +158,8 @@ PF('MekirVvMap').setLayerFeatureProperty('tter','1',{"_geomType":"Polygon","head
 
 function szamol(){
 
-	// Regular expression to extract polygon points and value
-	const pattern = /\.addFeatureToVectorLayer\('tter','POLYGON \(\((.*?)\).*\)','','(\d+)'/g;
+	// Regular expression to extract polygon points and value - captures full polygon definition including inner rings
+	const pattern = /\.addFeatureToVectorLayer\('tter','POLYGON \(\((.*?)\)\)','','(\d+)'/g;
 
 	// Array to store the results
 	const output = [];
@@ -169,9 +169,22 @@ function szamol(){
 
 	// Parse the data
 	while ((match = pattern.exec(input)) !== null) {
-    const polygonPoints = match[1].split(", "); // Split coordinates by ", "
+    const polygonText = match[1]; // Full polygon text including inner rings
     const value = parseInt(match[2], 10); // Convert the value to an integer
-    output.push({ polygon: polygonPoints, value });
+    
+    // Split by "),(" to separate outer and inner boundaries
+    // Format: outer_coords),(inner_coords
+    const boundaries = polygonText.split(/\),\s*\(/);
+    
+    const allPolygons = [];
+    for(let b = 0; b < boundaries.length; b++) {
+      // Clean up any remaining parentheses
+      let cleaned = boundaries[b].replace(/^\(/, '').replace(/\)$/, '');
+      const coords = cleaned.split(", ");
+      allPolygons.push(coords);
+    }
+    
+    output.push({ polygon: allPolygons[0], innerPolygons: allPolygons.slice(1), value, allBoundaries: allPolygons });
 	}
 	console.log(output);
 //	console.log(input[0].discreteProducts);
@@ -192,7 +205,13 @@ function szamol(){
 		htmltext += "</textarea></td>";
 		htmltext += "<td><textarea id='eov_"+i+"' cols='20'>";
 		console.log(terulet.polygon);
-		htmltext += terulet.polygon.join("\n");	
+		// Display outer boundary
+		htmltext += terulet.polygon.join("\n");
+		// Display inner boundaries with comma separator
+		for(let inner of terulet.innerPolygons) {
+			htmltext += "\n,";
+			htmltext += inner.join("\n");
+		}
 		htmltext += "</textarea></td>";
 		htmltext += '<td><input type = "button" onclick = "szamolfold('+i+')" value = "Szamolj>>"></td>'
 		htmltext += "<td><textarea id='WGS84OUT"+i+"' cols='30'></textarea></td>";
@@ -216,19 +235,24 @@ function egyesit(j) {
 function szamolfold(j) {
 
 	var lines = document.getElementById('eov_'+j).value.split("\n");
+	var boundaryIndex = 0;
+	var pointInBoundary = 0;
 
 	for(var i = 0; i <= lines.length;i++){
-		if( lines[i] == undefined || lines[i].length < 10) continue;
-		if(i != lines.length){
-			var splitby	 = ' ';
-			var eov = lines[i].split(splitby);
-				document.getElementById('WGS84OUT'+j).value+= i+' \n';
-				transformData(j,i, eov[1],eov[0],0);				
-		} else {
-			var eov = lines[0].split(splitby);
-			document.getElementById('WGS84OUT'+j).value+='aa'+i+'aa \n';
-			transformData(j,'aa'+i  +'aa', eov[1],eov[0],0);				
+		// Check for comma separator (inner boundary marker)
+		if(lines[i] && lines[i].trim() === ',') {
+			boundaryIndex++;
+			pointInBoundary = 0;
+			document.getElementById('WGS84OUT'+j).value+= ',\n';
+			continue;
 		}
+		
+		if( lines[i] == undefined || lines[i].length < 10) continue;
+		var splitby	 = ' ';
+		var eov = lines[i].split(splitby);
+		document.getElementById('WGS84OUT'+j).value+= pointInBoundary+' \n';
+		transformData(j,pointInBoundary, eov[1],eov[0],0);
+		pointInBoundary++;
 	}
 }
 
@@ -245,26 +269,58 @@ function szamolfoldBulk(j) {
 	var lines = document.getElementById('eov_'+j).value.split("\n");
 
 	var jsonArray = [];
+	var currentBoundary = [];
+	var allBoundaries = [];
 
 	for(var i = 0; i <= lines.length;i++){
+		// Check for comma separator (inner boundary marker)
+		if(lines[i] && lines[i].trim() === ',') {
+			// Save current boundary and start new one
+			if(currentBoundary.length > 0) {
+				allBoundaries.push(currentBoundary);
+				currentBoundary = [];
+			}
+			continue;
+		}
+		
 		if( lines[i] == undefined || lines[i].length < 10) continue;
-		if(i != lines.length){
-			var splitby	 = ' ';
-			var eov = lines[i].split(splitby);
-			var obj = new Object();
-		   	obj.pointNumber = i;
-   			obj.y = Number(eov[0]);
-   			obj.x = Number(eov[1]);
-   			obj.h = 0;
-   			obj.remark = "";
-   			jsonArray.push(obj);
-//			document.getElementById('WGS84OUT'+j).value+= i+' \n';
-		} else {
-   			jsonArray.push(jsonArray[0]);
-//			document.getElementById('WGS84OUT'+j).value+=(i+1)+' \n';
+		var splitby	 = ' ';
+		var eov = lines[i].split(splitby);
+		var obj = new Object();
+		obj.pointNumber = i;
+		obj.y = Number(eov[0]);
+		obj.x = Number(eov[1]);
+		obj.h = 0;
+		obj.remark = "";
+		obj.isInner = allBoundaries.length > 0; // Mark if this is an inner boundary
+		currentBoundary.push(obj);
+	}
+	
+	// Add the last boundary
+	if(currentBoundary.length > 0) {
+		allBoundaries.push(currentBoundary);
+	}
+	
+	// Close outer boundary
+	if(allBoundaries.length > 0 && allBoundaries[0].length > 0) {
+		allBoundaries[0].push(allBoundaries[0][0]);
+	}
+	
+	// Close inner boundaries
+	for(var b = 1; b < allBoundaries.length; b++) {
+		if(allBoundaries[b].length > 0) {
+			allBoundaries[b].push(allBoundaries[b][0]);
 		}
 	}
-	transformDataBulk(j, jsonArray);
+	
+	// Flatten for transformation
+	for(var b = 0; b < allBoundaries.length; b++) {
+		for(var p = 0; p < allBoundaries[b].length; p++) {
+			jsonArray.push(allBoundaries[b][p]);
+		}
+	}
+	
+	transformDataBulk(j, jsonArray, allBoundaries);
 }
 function displayField1(){
 	for(var i = 0; i < 300; i++){
@@ -323,7 +379,7 @@ function teszt(){
 	console.log(res);
 
 }
-function transformDataBulk(i, data){
+function transformDataBulk(i, data, allBoundaries){
 	/*
 	curl --location 
 		--request POST 
@@ -346,14 +402,40 @@ function transformDataBulk(i, data){
     // Process the retrieved data
     var str = "";
     var str1 = "";
-    for(var j = 0; j < data.length;j++){
-    	if(j!=0) {str1+="\n"; str+="\n";}
-	    str1 += data[j].pointNumber + ","; 
-	    str += data[j].lon + ','+data[j].lat +',0';
-	    str1 += data[j].lon + ','+data[j].lat +',0';
+    var pointIndex = 0;
+    
+    // If we have boundary info, format with comma separators
+    if(allBoundaries && allBoundaries.length > 0) {
+      for(var b = 0; b < allBoundaries.length; b++) {
+        // Add comma separator between boundaries (except before first)
+        if(b > 0) {
+          str += "\n,";
+          str1 += "\n,";
+        }
+        
+        // Process points in this boundary
+        for(var p = 0; p < allBoundaries[b].length; p++) {
+          if(pointIndex < data.length) {
+            if(p != 0) {str1+="\n"; str+="\n";}
+            str1 += data[pointIndex].pointNumber + ","; 
+            str += data[pointIndex].lon + ','+data[pointIndex].lat +',0';
+            str1 += data[pointIndex].lon + ','+data[pointIndex].lat +',0';
+            pointIndex++;
+          }
+        }
+      }
+    } else {
+      // Fallback to old behavior if no boundary info
+      for(var j = 0; j < data.length;j++){
+        if(j!=0) {str1+="\n"; str+="\n";}
+        str1 += data[j].pointNumber + ","; 
+        str += data[j].lon + ','+data[j].lat +',0';
+        str1 += data[j].lon + ','+data[j].lat +',0';
+      }
     }
+    
     document.getElementById('WGS84OUT'+i).value = str;
-    console.log("Results for entry: " + j + " " + str1);
+    console.log("Results for entry: " + i + " " + str1);
   })
   .catch(error => {
     // Handle any errors that occurred during the request
