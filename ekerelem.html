@@ -657,24 +657,25 @@ async function downloadAsWGS84SHP(j) {
     };
   geojson.features[0].properties.name = document.getElementById('foldnev'+j).value;
   var jsonArray = [];
-  for(var i = 0; i <= lines.length;i++){
+  for(var i = 0; i < lines.length; i++){
+    // Check if line exists and is not empty
+    if(lines[i] == undefined || lines[i].trim().length === 0) continue;
+    
+    var trimmedLine = lines[i].trim();
+    
     // Skip parentheses
-    if( lines[i].trim() === '(' || lines[i].trim() === ')') continue;
+    if(trimmedLine === '(' || trimmedLine === ')') continue;
     // Stop processing at comma separator - ignore inner boundaries
-    if( lines[i].trim() === ',' || lines[i].trim() === ', ') break;
-    // Skip empty lines
-    if( lines[i] == undefined || lines[i].trim().length === 0) continue;
-    if(i != lines.length){
-      var splitby  = ',';
-      var wgs = lines[i].split(splitby);
-      // Make sure we have valid coordinates (at least 2 values)
-      if(wgs.length >= 2 && !isNaN(Number(wgs[0])) && !isNaN(Number(wgs[1]))) {
-        var obj = [];
-        obj.push(Number(wgs[0]));
-        obj.push(Number(wgs[1]));
-        jsonArray.push(obj);
-      }
-    } else {
+    if(trimmedLine === ',' || trimmedLine === ', ') break;
+    
+    var splitby = ',';
+    var wgs = lines[i].split(splitby);
+    // Make sure we have valid coordinates (at least 2 values)
+    if(wgs.length >= 2 && !isNaN(Number(wgs[0])) && !isNaN(Number(wgs[1]))) {
+      var obj = [];
+      obj.push(Number(wgs[0]));
+      obj.push(Number(wgs[1]));
+      jsonArray.push(obj);
     }
   }
   // Only close polygon if we have coordinates
