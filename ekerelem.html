@@ -184,16 +184,24 @@ function szamol(){
       allPolygons.push(coords);
     }
     
-    output.push({ polygon: allPolygons[0], innerPolygons: allPolygons.slice(1), value, allBoundaries: allPolygons });
+    // Store outer and first inner only
+    output.push({ 
+      polygon: allPolygons[0], 
+      innerPolygons: allPolygons.length > 1 ? [allPolygons[1]] : [],
+      value,
+      allBoundaries: allPolygons 
+    });
 	}
 	console.log(output);
 //	console.log(input[0].discreteProducts);
 	var htmltext = "<table> ";
 	htmltext += "<thead><td>ID</td>";
 	htmltext += "<td>Terület elnevezése</td>";
-	htmltext += "<td>EOV koordinatak</td>";
+	htmltext += "<td>EOV koordinatak<br>(kulso)</td>";
+	htmltext += "<td>EOV koordinatak<br>(belso)</td>";
 	htmltext += "<td></td>";
-	htmltext += "<td>WGS84 koordinatak</td>";
+	htmltext += "<td>WGS84 koordinatak<br>(kulso)</td>";
+	htmltext += "<td>WGS84 koordinatak<br>(belso)</td>";
 	htmltext += "<td>Letöltes</td>";
 	htmltext += "</thead>";
 	var i = 0;
@@ -203,18 +211,27 @@ function szamol(){
 		htmltext += "<td><textarea id='foldnev"+i+"' cols='20'>";
 		htmltext += terulet.value;
 		htmltext += "</textarea></td>";
-		htmltext += "<td><textarea id='eov_"+i+"' cols='20'>";
-		console.log(terulet.polygon);
-		// Display outer boundary
+		
+		// Outer boundary EOV
+		htmltext += "<td><textarea id='eov_outer_"+i+"' cols='20'>";
 		htmltext += terulet.polygon.join("\n");
-		// Display inner boundaries with comma separator on its own line
-		for(let inner of terulet.innerPolygons) {
-			htmltext += "\n,\n";
-			htmltext += inner.join("\n");
+		htmltext += "</textarea></td>";
+		
+		// Inner boundary EOV (first inner only)
+		htmltext += "<td><textarea id='eov_inner_"+i+"' cols='20'>";
+		if(terulet.innerPolygons.length > 0) {
+			htmltext += terulet.innerPolygons[0].join("\n");
 		}
 		htmltext += "</textarea></td>";
+		
 		htmltext += '<td><input type = "button" onclick = "szamolfold('+i+')" value = "Szamolj>>"></td>'
-		htmltext += "<td><textarea id='WGS84OUT"+i+"' cols='30'></textarea></td>";
+		
+		// Outer boundary WGS84
+		htmltext += "<td><textarea id='WGS84OUT_outer_"+i+"' cols='30'></textarea></td>";
+		
+		// Inner boundary WGS84
+		htmltext += "<td><textarea id='WGS84OUT_inner_"+i+"' cols='30'></textarea></td>";
+		
 		htmltext += '<td><input type = "button" onclick = "downloadAsKML('+i+')" value = "KML">';
 		htmltext += '<input type = "button" onclick = "downloadAsWGS84SHP('+i+')" value = "WGS84 Shape">';
 		htmltext += '<input type = "button" onclick = "downloadAsWGS84SHPWithInner('+i+')" value = "WGS84 Shape (Inner)">';
@@ -228,7 +245,7 @@ function szamol(){
 
 }
 function egyesit(j) {
-	document.getElementById('WGS84OUTKOMBI').value += document.getElementById('WGS84OUT'+j).value;
+	document.getElementById('WGS84OUTKOMBI').value += document.getElementById('WGS84OUT_outer_'+j).value;
 	document.getElementById('WGS84OUTKOMBI').value += '\n';
 }
 
@@ -259,78 +276,69 @@ function szamolfold(j) {
 function szamolfoldBulk1() {
 	console.log("SZamolFoldBulk1() ")
 	for(var i = 0; i < 1000; i++){
-		if(document.getElementById('eov_'+i) != null)
+		if(document.getElementById('eov_outer_'+i) != null)
 			szamolfoldBulk(i);
 	}
 }
 
 function szamolfoldBulk(j) {
-	console.log("Calculating for entry: " + j + "  " + document.getElementById('eov_'+j).value);
-	var lines = document.getElementById('eov_'+j).value.split("\n");
+	// Process outer boundary
+	var outerLines = document.getElementById('eov_outer_'+j).value.split("\n");
+	var outerJsonArray = [];
 
-	var jsonArray = [];
-	var currentBoundary = [];
-	var allBoundaries = [];
-
-	for(var i = 0; i <= lines.length;i++){
-		// Check for comma separator (inner boundary marker)
-		if(lines[i] && lines[i].trim() === ',') {
-			// Save current boundary and start new one
-			if(currentBoundary.length > 0) {
-				allBoundaries.push(currentBoundary);
-				currentBoundary = [];
-			}
-			continue;
-		}
-		
-		if( lines[i] == undefined || lines[i].length < 10) continue;
-		var splitby	 = ' ';
-		var eov = lines[i].split(splitby);
+	for(var i = 0; i < outerLines.length; i++){
+		if(outerLines[i] == undefined || outerLines[i].length < 10) continue;
+		var splitby = ' ';
+		var eov = outerLines[i].split(splitby);
 		var obj = new Object();
 		obj.pointNumber = i;
 		obj.y = Number(eov[0]);
 		obj.x = Number(eov[1]);
 		obj.h = 0;
 		obj.remark = "";
-		obj.isInner = allBoundaries.length > 0; // Mark if this is an inner boundary
-		currentBoundary.push(obj);
+		outerJsonArray.push(obj);
 	}
-	
-	// Add the last boundary
-	if(currentBoundary.length > 0) {
-		allBoundaries.push(currentBoundary);
-	}
-	
 	// Close outer boundary
-	if(allBoundaries.length > 0 && allBoundaries[0].length > 0) {
-		allBoundaries[0].push(allBoundaries[0][0]);
+	if(outerJsonArray.length > 0) {
+		outerJsonArray.push(outerJsonArray[0]);
 	}
+	transformDataBulk(j, outerJsonArray, 'outer');
 	
-	// Close inner boundaries
-	for(var b = 1; b < allBoundaries.length; b++) {
-		if(allBoundaries[b].length > 0) {
-			allBoundaries[b].push(allBoundaries[b][0]);
+	// Process inner boundary if exists
+	var innerElement = document.getElementById('eov_inner_'+j);
+	if(innerElement && innerElement.value.trim().length > 0) {
+		var innerLines = innerElement.value.split("\n");
+		var innerJsonArray = [];
+
+		for(var i = 0; i < innerLines.length; i++){
+			if(innerLines[i] == undefined || innerLines[i].length < 10) continue;
+			var splitby = ' ';
+			var eov = innerLines[i].split(splitby);
+			var obj = new Object();
+			obj.pointNumber = i;
+			obj.y = Number(eov[0]);
+			obj.x = Number(eov[1]);
+			obj.h = 0;
+			obj.remark = "";
+			innerJsonArray.push(obj);
 		}
-	}
-	
-	// Flatten for transformation
-	for(var b = 0; b < allBoundaries.length; b++) {
-		for(var p = 0; p < allBoundaries[b].length; p++) {
-			jsonArray.push(allBoundaries[b][p]);
+		// Close inner boundary
+		if(innerJsonArray.length > 0) {
+			innerJsonArray.push(innerJsonArray[0]);
 		}
+		transformDataBulk(j, innerJsonArray, 'inner');
 	}
-	
-	transformDataBulk(j, jsonArray, allBoundaries);
 }
+
 function displayField1(){
 	for(var i = 0; i < 300; i++){
-		if(document.getElementById('eov_'+i) != null)
+		if(document.getElementById('eov_outer_'+i) != null)
 			displayField(i);
 	}
 }
 
 function displayField(j){
-	var coordinates = document.getElementById('WGS84OUT'+j).value.replaceAll(",0","").replaceAll("(","").replaceAll(")","").split("\n");
+	var coordinates = document.getElementById('WGS84OUT_outer_'+j).value.replaceAll(",0","").replaceAll("(","").replaceAll(")","").split("\n");
 	var data = "[";
 	for(var i = 0; i <= coordinates.length;i++){
 		// Skip empty lines
@@ -387,7 +395,7 @@ function teszt(){
 	console.log(res);
 
 }
-function transformDataBulk(i, data, allBoundaries){
+function transformDataBulk(i, data, target){
 	/*
 	curl --location 
 		--request POST 
@@ -395,62 +403,29 @@ function transformDataBulk(i, data, allBoundaries){
 		--header 'Content-Type: application/json' 
 		--data-raw '[{"pointNumber":"1","y":722440.365 , "x": 184418.844,"h":57.460,"remark":""}]'
 	*/
-	console.log(data);
+	console.log("Transforming for target:", target, data);
 	fetch('https://eht2.gnssnet.hu/api/transformation/eov-to-etrs89', 
 		{method: "POST", headers: { "Content-Type": "application/json"},body: JSON.stringify(data)})
   .then(response => {
     if (!response.ok) {
       throw new Error('Network response was not OK');
     }
-//    console.log(response);
-//    console.log(response.json());
     return response.json();
   })
   .then(data => {
     // Process the retrieved data
     var str = "";
-    var str1 = "";
-    var pointIndex = 0;
-    
-    // If we have boundary info, format with comma separators
-    if(allBoundaries && allBoundaries.length > 0) {
-      for(var b = 0; b < allBoundaries.length; b++) {
-        // Add comma separator between boundaries (except before first)
-        if(b > 0) {
-          str += "\n,\n";
-          str1 += "\n,\n";
-        }
-        
-        // Process points in this boundary
-        for(var p = 0; p < allBoundaries[b].length; p++) {
-          if(pointIndex < data.length) {
-            // Add newline before each point (except first point of first boundary)
-            if(pointIndex > 0) {
-              str1 += "\n";
-              str += "\n";
-            }
-            str1 += data[pointIndex].pointNumber + ","; 
-            str += data[pointIndex].lon + ','+data[pointIndex].lat +',0';
-            str1 += data[pointIndex].lon + ','+data[pointIndex].lat +',0';
-            pointIndex++;
-          }
-        }
-      }
-    } else {
-      // Fallback to old behavior if no boundary info
-      for(var j = 0; j < data.length;j++){
-        if(j!=0) {str1+="\n"; str+="\n";}
-        str1 += data[j].pointNumber + ","; 
-        str += data[j].lon + ','+data[j].lat +',0';
-        str1 += data[j].lon + ','+data[j].lat +',0';
-      }
+    for(var j = 0; j < data.length;j++){
+      if(j!=0) {str+="\n";}
+      str += data[j].lon + ','+data[j].lat +',0';
     }
     
-    document.getElementById('WGS84OUT'+i).value = str;
-    console.log("Results for entry: " + i + " " + str1);
+    // Write to the correct textarea based on target
+    var targetTextarea = 'WGS84OUT_' + target + '_' + i;
+    document.getElementById(targetTextarea).value = str;
+    console.log("Results for entry: " + i + " (" + target + ") " + str);
   })
   .catch(error => {
-    // Handle any errors that occurred during the request
     console.error('Error:', error);
   });
 }
@@ -538,7 +513,7 @@ function downloadAsKML(i){
 }
 function downloadAsKML(i, s){
 const element = document.createElement('a');
-var datacsv = document.getElementById('WGS84OUT'+i).value;
+var datacsv = document.getElementById('WGS84OUT_outer_'+i).value;
 console.log(datacsv);
 if(s){
 	var coordinates = String(datacsv).replaceAll("(","").replaceAll(")","").split("\n");
@@ -639,7 +614,7 @@ document.body.removeChild(element);
 }
 
 async function downloadAsWGS84SHP(j) {
-  var lines = document.getElementById('WGS84OUT'+j).value.split("\n");
+  var lines = document.getElementById('WGS84OUT_outer_'+j).value.split("\n");
   const geojson = {
       "type": "FeatureCollection",
       "features": [
@@ -703,35 +678,9 @@ async function downloadAsWGS84SHP(j) {
 }
 
 async function downloadAsWGS84SHPWithInner(j) {
-  var content = document.getElementById('WGS84OUT'+j).value;
-  
-  // Step 1: Split content by comma-only lines to separate outer from inner boundaries
-  var lines = content.split("\n");
-  var boundaries = [];
-  var currentBoundary = [];
-  
-  for(var i = 0; i < lines.length; i++) {
-    var line = lines[i].trim();
-    
-    // Check if this is a comma-only separator line
-    if(line === ',' || line === ', ') {
-      // Save current boundary and start new one
-      if(currentBoundary.length > 0) {
-        boundaries.push(currentBoundary);
-        currentBoundary = [];
-      }
-    } else if(line.length > 0) {
-      // Add coordinate to current boundary
-      currentBoundary.push(line);
-    }
-  }
-  
-  // Add the last boundary
-  if(currentBoundary.length > 0) {
-    boundaries.push(currentBoundary);
-  }
-  
-  console.log("Found " + boundaries.length + " boundaries");
+  // Get outer and inner boundary data from separate textareas
+  var outerContent = document.getElementById('WGS84OUT_outer_'+j).value;
+  var innerContent = document.getElementById('WGS84OUT_inner_'+j).value;
   
   const geojson = {
       "type": "FeatureCollection",
@@ -749,32 +698,61 @@ async function downloadAsWGS84SHPWithInner(j) {
       ]
     };
   
-  // Step 2: Process each boundary
-  for(var b = 0; b < boundaries.length; b++) {
-    var jsonArray = [];
+  // Process outer boundary
+  var outerLines = outerContent.split("\n");
+  var outerJsonArray = [];
+  
+  console.log("Processing outer boundary with " + outerLines.length + " lines");
+  
+  for(var i = 0; i < outerLines.length; i++){
+    if(outerLines[i] == undefined || outerLines[i].trim().length === 0) continue;
     
-    console.log("Processing boundary " + b + " with " + boundaries[b].length + " coordinate lines");
+    var parts = outerLines[i].split(',');
     
-    for(var i = 0; i < boundaries[b].length; i++) {
-      var parts = boundaries[b][i].split(',');
+    if(parts.length >= 2) {
+      var lon = Number(parts[0].trim());
+      var lat = Number(parts[1].trim());
       
-      // Must have at least 2 values (lon, lat)
+      if(!isNaN(lon) && !isNaN(lat)) {
+        outerJsonArray.push([lon, lat]);
+      }
+    }
+  }
+  
+  // Close outer polygon
+  if(outerJsonArray.length > 0) {
+    outerJsonArray.push(outerJsonArray[0]);
+    geojson.features[0].geometry.coordinates.push(outerJsonArray);
+    console.log("Outer boundary: " + outerJsonArray.length + " points");
+  }
+  
+  // Process inner boundary if exists
+  if(innerContent && innerContent.trim().length > 0) {
+    var innerLines = innerContent.split("\n");
+    var innerJsonArray = [];
+    
+    console.log("Processing inner boundary with " + innerLines.length + " lines");
+    
+    for(var i = 0; i < innerLines.length; i++){
+      if(innerLines[i] == undefined || innerLines[i].trim().length === 0) continue;
+      
+      var parts = innerLines[i].split(',');
+      
       if(parts.length >= 2) {
         var lon = Number(parts[0].trim());
         var lat = Number(parts[1].trim());
         
-        // Validate numbers
         if(!isNaN(lon) && !isNaN(lat)) {
-          jsonArray.push([lon, lat]);
+          innerJsonArray.push([lon, lat]);
         }
       }
     }
     
-    // Close polygon: add first point at the end
-    if(jsonArray.length > 0) {
-      jsonArray.push(jsonArray[0]);
-      geojson.features[0].geometry.coordinates.push(jsonArray);
-      console.log("Boundary " + b + ": " + jsonArray.length + " points");
+    // Close inner polygon
+    if(innerJsonArray.length > 0) {
+      innerJsonArray.push(innerJsonArray[0]);
+      geojson.features[0].geometry.coordinates.push(innerJsonArray);
+      console.log("Inner boundary: " + innerJsonArray.length + " points");
     }
   }
 
