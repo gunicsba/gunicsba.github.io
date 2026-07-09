@@ -609,7 +609,7 @@ var KMLContent = `<?xml version="1.0" encoding="utf-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
   <Document>\n`;
 
-  for(var i = 0; i < 3000; i++){
+  for(var i = 0; i < 300000; i++){
     if(document.getElementById('eov_'+i) == null) continue;
     var datacsv = document.getElementById('WGS84OUT'+i).value;
     datacsv = datacsv.replaceAll('\n',' ');
@@ -650,7 +650,7 @@ document.body.removeChild(element);
 }
 
 function downloadAsKML2(){
-  for(var i = 0; i < 300; i++){
+  for(var i = 0; i < 300000; i++){
     if(document.getElementById('eov_'+i) != null)
       downloadAsKML(i);
   }
