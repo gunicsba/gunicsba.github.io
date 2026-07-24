@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Láncos adagoló – geometriai kalibráció</title>
+<style>
+:root{
+  --bg:#0f172a; --card:#172033; --card2:#111827; --text:#eef2ff;
+  --muted:#aab4c8; --line:#334155; --accent:#38bdf8; --ok:#34d399;
+  --warn:#fbbf24; --bad:#fb7185;
+}
+*{box-sizing:border-box}
+body{margin:0;background:linear-gradient(180deg,#0b1220,#111827);color:var(--text);
+font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+main{max-width:1180px;margin:auto;padding:22px}
+h1{font-size:clamp(1.5rem,3vw,2.35rem);margin:0 0 8px}
+.lead{color:var(--muted);margin:0 0 20px;line-height:1.5}
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}
+.card{background:rgba(23,32,51,.96);border:1px solid var(--line);border-radius:16px;padding:17px;
+box-shadow:0 12px 35px rgba(0,0,0,.18)}
+.inputs{grid-column:span 7}.results{grid-column:span 5}
+@media(max-width:850px){.inputs,.results{grid-column:1/-1}}
+.section-title{font-size:1rem;margin:0 0 13px;color:#dbeafe}
+.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media(max-width:560px){.fields{grid-template-columns:1fr}}
+label{display:block;font-size:.82rem;color:var(--muted);margin-bottom:5px}
+.field{position:relative}
+input,select{width:100%;border:1px solid #475569;background:#0f172a;color:var(--text);
+border-radius:10px;padding:11px 12px;font-size:1rem;outline:none}
+input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(56,189,248,.14)}
+.hint{font-size:.75rem;color:#7f8ba3;margin-top:5px;line-height:1.35}
+.range-row{display:grid;grid-template-columns:1fr 90px;gap:10px;align-items:center}
+input[type=range]{padding:0;border:none}
+hr{border:0;border-top:1px solid var(--line);margin:18px 0}
+.metric{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid rgba(51,65,85,.65)}
+.metric:last-child{border-bottom:0}
+.metric span:first-child{color:var(--muted)}
+.metric strong{text-align:right;font-variant-numeric:tabular-nums}
+.big{padding:14px;border-radius:13px;background:#0f172a;border:1px solid var(--line);margin-bottom:12px}
+.big .value{font-size:2rem;font-weight:750;color:var(--accent);font-variant-numeric:tabular-nums}
+.status{padding:12px;border-radius:12px;margin-top:12px;line-height:1.45}
+.status.ok{background:rgba(52,211,153,.11);border:1px solid rgba(52,211,153,.35)}
+.status.warn{background:rgba(251,191,36,.11);border:1px solid rgba(251,191,36,.35)}
+.status.bad{background:rgba(251,113,133,.11);border:1px solid rgba(251,113,133,.35)}
+.formula{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;background:#0b1220;padding:12px;border-radius:10px;
+color:#cbd5e1;overflow:auto;font-size:.83rem;line-height:1.5}
+button{border:0;border-radius:10px;padding:10px 13px;font-weight:700;cursor:pointer}
+.btn{background:var(--accent);color:#062033}
+.btn2{background:#334155;color:var(--text)}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:15px}
+.small{font-size:.78rem;color:var(--muted);line-height:1.45}
+table{width:100%;border-collapse:collapse;font-size:.86rem}
+th,td{padding:8px;border-bottom:1px solid var(--line);text-align:right}
+th:first-child,td:first-child{text-align:left}
+details{margin-top:14px}
+summary{cursor:pointer;color:#dbeafe}
+</style>
+</head>
+<body>
+<main>
+<h1>Láncos adagoló – geometriai kalibráció</h1>
+<p class="lead">
+Ez az oldal előzetes leforgatás nélkül, a nyílás geometriájából becsüli a kihordást.
+A számítás alapja: <b>nyílásszélesség × nyílásmagasság × láncút/fordulat × kitöltési tényező</b>.
+</p>
+
+<div class="grid">
+<section class="card inputs">
+<h2 class="section-title">1. Gépgeometria</h2>
+<div class="fields">
+  <div class="field">
+    <label>Nyílás szélessége [mm]</label>
+    <input id="openingWidth" type="number" min="1" step="1" value="500">
+  </div>
+  <div class="field">
+    <label>Nyílás maximális magassága a 80-as állásnál [mm]</label>
+    <input id="maxOpeningHeight" type="number" min="0.1" step="0.1" value="80">
+    <div class="hint">Ha a skála nem lineáris, lent választható görbe.</div>
+  </div>
+  <div class="field">
+    <label>Nyílásállás [0–80]</label>
+    <div class="range-row">
+      <input id="openingSettingRange" type="range" min="0" max="80" step="1" value="40">
+      <input id="openingSetting" type="number" min="0" max="80" step="1" value="40">
+    </div>
+  </div>
+  <div class="field">
+    <label>Nyílás karakterisztikája</label>
+    <select id="openingCurve">
+      <option value="1">Lineáris</option>
+      <option value="1.25">Enyhén progresszív</option>
+      <option value="1.5">Progresszív</option>
+      <option value="0.8">Enyhén degresszív</option>
+    </select>
+    <div class="hint">Magasság = max. magasság × (állás/80)^k</div>
+  </div>
+  <div class="field">
+    <label>Lánc útja egy jeladófordulatra [mm]</label>
+    <input id="chainTravel" type="number" min="0.1" step="0.1" value="500">
+    <div class="hint">Tipikusan a hajtó lánckerék osztóköri kerülete, ha a jeladó 1:1-ben forog vele.</div>
+  </div>
+  <div class="field">
+    <label>Jeladó impulzus/fordulat</label>
+    <input id="ppr" type="number" min="1" step="1" value="360">
+  </div>
+  <div class="field">
+    <label>Kitöltési tényező [%]</label>
+    <input id="fillFactor" type="number" min="1" max="150" step="1" value="70">
+    <div class="hint">100% = a geometriai térfogat teljesen kitöltött. Láncos kihordásnál gyakran kisebb.</div>
+  </div>
+  <div class="field">
+    <label>Maximális láncfordulat [1/min]</label>
+    <input id="maxRpm" type="number" min="0.1" step="0.1" value="60">
+  </div>
+</div>
+
+<hr>
+<h2 class="section-title">2. Anyag és munkaparaméterek</h2>
+<div class="fields">
+  <div class="field">
+    <label>Anyag halmazsűrűsége [kg/l]</label>
+    <input id="density" type="number" min="0.001" step="0.01" value="0.80">
+  </div>
+  <div class="field">
+    <label>Céldózis [kg/ha]</label>
+    <input id="dose" type="number" min="0" step="1" value="200">
+  </div>
+  <div class="field">
+    <label>Munkaszélesség [m]</label>
+    <input id="workWidth" type="number" min="0.01" step="0.1" value="6">
+  </div>
+  <div class="field">
+    <label>Haladási sebesség [km/h]</label>
+    <input id="speed" type="number" min="0" step="0.1" value="10">
+  </div>
+</div>
+
+<div class="actions">
+  <button class="btn" id="recalc">Újraszámítás</button>
+  <button class="btn2" id="reset">Alapértékek</button>
+</div>
+
+<details>
+<summary>Opcionális utólagos korrekció egy tényleges mérésből</summary>
+<div class="fields" style="margin-top:12px">
+  <div class="field">
+    <label>Próba alatt számolt impulzus</label>
+    <input id="testPulses" type="number" min="0" step="1" placeholder="pl. 7200">
+  </div>
+  <div class="field">
+    <label>Ténylegesen kihordott tömeg [kg]</label>
+    <input id="testMass" type="number" min="0" step="0.01" placeholder="pl. 38.5">
+  </div>
+</div>
+<div class="actions">
+  <button class="btn2" id="applyCorrection">Kitöltési tényező korrigálása</button>
+</div>
+<p class="small">Ez nem szükséges az első becsléshez, de később egyetlen mérésből hozzáigazítja a modellt a valós géphez.</p>
+</details>
+</section>
+
+<section class="card results">
+<h2 class="section-title">Eredmények</h2>
+<div class="big">
+  <div class="small">Szükséges láncfordulat</div>
+  <div class="value" id="requiredRpm">–</div>
+  <div class="small">1/min</div>
+</div>
+
+<div class="metric"><span>Tényleges nyílásmagasság</span><strong id="actualHeight">–</strong></div>
+<div class="metric"><span>Geometriai térfogat / fordulat</span><strong id="geoVolume">–</strong></div>
+<div class="metric"><span>Becsült hasznos térfogat / fordulat</span><strong id="effectiveVolume">–</strong></div>
+<div class="metric"><span>Kihordott tömeg / fordulat</span><strong id="massPerRev">–</strong></div>
+<div class="metric"><span>Kalibrációs szám</span><strong id="pulsesPerKg">–</strong></div>
+<div class="metric"><span>Szükséges tömegáram</span><strong id="requiredMassFlow">–</strong></div>
+<div class="metric"><span>Szükséges impulzusfrekvencia</span><strong id="requiredHz">–</strong></div>
+<div class="metric"><span>Max. impulzusfrekvencia</span><strong id="maxHz">–</strong></div>
+<div class="metric"><span>Max. kihordás</span><strong id="maxMassFlow">–</strong></div>
+<div class="metric"><span>Max. dózis a megadott sebességnél</span><strong id="maxDose">–</strong></div>
+<div class="metric"><span>Max. haladási sebesség a céldózissal</span><strong id="maxSpeed">–</strong></div>
+<div id="status" class="status">–</div>
+
+<hr>
+<h2 class="section-title">0–80 nyílásállás gyors áttekintése</h2>
+<div style="overflow:auto;max-height:310px">
+<table>
+<thead><tr><th>Állás</th><th>Magasság</th><th>kg/ford.</th><th>Imp./kg</th><th>Max. kg/min</th></tr></thead>
+<tbody id="previewTable"></tbody>
+</table>
+</div>
+
+<hr>
+<div class="formula">
+V_geo [liter/ford] = szélesség[m] × magasság[m] × láncút[m] × 1000<br>
+V_eff = V_geo × kitöltési_tényező<br>
+kg/ford = V_eff × sűrűség[kg/l]<br>
+impulzus/kg = PPR ÷ kg/ford<br>
+kg/min = dózis × munkaszélesség × sebesség ÷ 600<br>
+szükséges RPM = kg/min ÷ kg/ford
+</div>
+<p class="small">
+Fontos: a sűrűség a tömeget kompenzálja, de az anyag folyóképességét nem.
+Ezért a kitöltési tényező a modell legérzékenyebb paramétere.
+</p>
+</section>
+</div>
+</main>
+
+<script>
+const ids = [
+'openingWidth','maxOpeningHeight','openingSetting','openingCurve','chainTravel','ppr',
+'fillFactor','maxRpm','density','dose','workWidth','speed'
+];
+const $ = id => document.getElementById(id);
+const n = id => Number($(id).value) || 0;
+const fmt = (x,d=2) => Number.isFinite(x) ? x.toLocaleString('hu-HU',{maximumFractionDigits:d,minimumFractionDigits:d}) : '–';
+
+function calcForSetting(setting){
+  const exponent = n('openingCurve');
+  const hMm = n('maxOpeningHeight') * Math.pow(Math.max(0,setting)/80, exponent);
+  const geoLiters = (n('openingWidth')/1000) * (hMm/1000) * (n('chainTravel')/1000) * 1000;
+  const effLiters = geoLiters * n('fillFactor')/100;
+  const kgRev = effLiters * n('density');
+  return {hMm,geoLiters,effLiters,kgRev};
+}
+
+function calculate(){
+  const c = calcForSetting(n('openingSetting'));
+  const ppr = n('ppr');
+  const dose = n('dose'), width=n('workWidth'), speed=n('speed'), maxRpm=n('maxRpm');
+  const kgMin = dose * width * speed / 600;
+  const requiredRpm = c.kgRev > 0 ? kgMin / c.kgRev : Infinity;
+  const pulsesKg = c.kgRev > 0 ? ppr / c.kgRev : Infinity;
+  const reqHz = requiredRpm * ppr / 60;
+  const maxHz = maxRpm * ppr / 60;
+  const maxKgMin = c.kgRev * maxRpm;
+  const maxDose = width>0 && speed>0 ? maxKgMin * 600 / (width*speed) : Infinity;
+  const maxSpeed = dose>0 && width>0 ? maxKgMin * 600 / (dose*width) : Infinity;
+
+  $('requiredRpm').textContent = fmt(requiredRpm,2);
+  $('actualHeight').textContent = fmt(c.hMm,2)+' mm';
+  $('geoVolume').textContent = fmt(c.geoLiters,3)+' l/ford.';
+  $('effectiveVolume').textContent = fmt(c.effLiters,3)+' l/ford.';
+  $('massPerRev').textContent = fmt(c.kgRev,3)+' kg/ford.';
+  $('pulsesPerKg').textContent = fmt(pulsesKg,2)+' imp./kg';
+  $('requiredMassFlow').textContent = fmt(kgMin,2)+' kg/min';
+  $('requiredHz').textContent = fmt(reqHz,2)+' Hz';
+  $('maxHz').textContent = fmt(maxHz,2)+' Hz';
+  $('maxMassFlow').textContent = fmt(maxKgMin,2)+' kg/min';
+  $('maxDose').textContent = fmt(maxDose,1)+' kg/ha';
+  $('maxSpeed').textContent = fmt(maxSpeed,1)+' km/h';
+
+  const status=$('status');
+  const ratio = requiredRpm/maxRpm;
+  if(!Number.isFinite(requiredRpm) || c.kgRev<=0){
+    status.className='status bad';
+    status.innerHTML='<b>Nincs számítható kihordás.</b><br>Ellenőrizd a nyílásállást és a geometriai adatokat.';
+  } else if(requiredRpm > maxRpm){
+    status.className='status bad';
+    status.innerHTML='<b>A kívánt dózis nem érhető el.</b><br>A szükséges fordulat '+fmt(requiredRpm,1)+' 1/min, miközben a maximum '+fmt(maxRpm,1)+' 1/min. Nyisd nagyobbra a nyílást, csökkentsd a sebességet vagy a dózist.';
+  } else if(ratio > .85){
+    status.className='status warn';
+    status.innerHTML='<b>Közel a teljesítményhatárhoz.</b><br>A maximális láncfordulat '+fmt(ratio*100,0)+'%-át használod.';
+  } else {
+    status.className='status ok';
+    status.innerHTML='<b>A beállítás elméletileg teljesíthető.</b><br>A maximális láncfordulat '+fmt(ratio*100,0)+'%-át használod.';
+  }
+  buildTable();
+}
+
+function buildTable(){
+ const tbody=$('previewTable'); tbody.innerHTML='';
+ for(let s=0;s<=80;s+=10){
+   const c=calcForSetting(s);
+   const ppk=c.kgRev>0?n('ppr')/c.kgRev:Infinity;
+   const maxFlow=c.kgRev*n('maxRpm');
+   const tr=document.createElement('tr');
+   tr.innerHTML=`<td>${s}</td><td>${fmt(c.hMm,1)} mm</td><td>${fmt(c.kgRev,3)}</td><td>${fmt(ppk,1)}</td><td>${fmt(maxFlow,1)}</td>`;
+   tbody.appendChild(tr);
+ }
+}
+
+$('openingSettingRange').addEventListener('input',e=>{$('openingSetting').value=e.target.value;calculate()});
+$('openingSetting').addEventListener('input',e=>{$('openingSettingRange').value=e.target.value;calculate()});
+ids.forEach(id=>$(id).addEventListener('input',calculate));
+$('recalc').addEventListener('click',calculate);
+$('reset').addEventListener('click',()=>location.reload());
+
+$('applyCorrection').addEventListener('click',()=>{
+  const pulses=Number($('testPulses').value), mass=Number($('testMass').value);
+  const predictedKgPerPulse = 1 / (n('ppr') / calcForSetting(n('openingSetting')).kgRev);
+  const predictedMass = pulses * predictedKgPerPulse;
+  if(!(pulses>0 && mass>0 && predictedMass>0)){
+    alert('Adj meg érvényes impulzusszámot és tényleges tömeget.');
+    return;
+  }
+  const newFill = n('fillFactor') * mass / predictedMass;
+  $('fillFactor').value = Math.max(1,Math.min(150,newFill)).toFixed(1);
+  calculate();
+  alert('A kitöltési tényező korrigálva: '+$('fillFactor').value+'%');
+});
+calculate();
+</script>
+</body>
+</html>

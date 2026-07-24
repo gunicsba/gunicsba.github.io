@@ -6,6 +6,8 @@
   rel="stylesheet"
 />
 <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
+<script src="https://unpkg.com/@mapbox/shp-write@latest/shpwrite.js"></script>
+<script src="https://unpkg.com/jszip/dist/jszip.min.js"></script>
 <!-- <script src="https://api.mapbox.com/mapbox.js/plugins/turf/v3.0.11/turf.min.js"></script> -->
 <script src='libs/turf.min.js'></script>
  <style>
@@ -156,8 +158,8 @@ PF('MekirVvMap').setLayerFeatureProperty('tter','1',{"_geomType":"Polygon","head
 
 function szamol(){
 
-	// Regular expression to extract polygon points and value
-	const pattern = /\.addFeatureToVectorLayer\('tter','POLYGON \(\((.*?)\).*\)','','(\d+)'/g;
+	// Regular expression to extract polygon points and value - captures full polygon definition including inner rings
+	const pattern = /\.addFeatureToVectorLayer\('tter','POLYGON \(\((.*?)\)\)','','(\d+)'/g;
 
 	// Array to store the results
 	const output = [];
@@ -167,18 +169,39 @@ function szamol(){
 
 	// Parse the data
 	while ((match = pattern.exec(input)) !== null) {
-    const polygonPoints = match[1].split(", "); // Split coordinates by ", "
+    const polygonText = match[1]; // Full polygon text including inner rings
     const value = parseInt(match[2], 10); // Convert the value to an integer
-    output.push({ polygon: polygonPoints, value });
+    
+    // Split by "),(" to separate outer and inner boundaries
+    // Format: outer_coords),(inner_coords
+    const boundaries = polygonText.split(/\),\s*\(/);
+    
+    const allPolygons = [];
+    for(let b = 0; b < boundaries.length; b++) {
+      // Clean up any remaining parentheses
+      let cleaned = boundaries[b].replace(/^\(/, '').replace(/\)$/, '');
+      const coords = cleaned.split(", ");
+      allPolygons.push(coords);
+    }
+    
+    // Store outer and first inner only
+    output.push({ 
+      polygon: allPolygons[0], 
+      innerPolygons: allPolygons.length > 1 ? [allPolygons[1]] : [],
+      value,
+      allBoundaries: allPolygons 
+    });
 	}
 	console.log(output);
 //	console.log(input[0].discreteProducts);
 	var htmltext = "<table> ";
 	htmltext += "<thead><td>ID</td>";
 	htmltext += "<td>Terület elnevezése</td>";
-	htmltext += "<td>EOV koordinatak</td>";
+	htmltext += "<td>EOV koordinatak<br>(kulso)</td>";
+	htmltext += "<td>EOV koordinatak<br>(belso)</td>";
 	htmltext += "<td></td>";
-	htmltext += "<td>WGS84 koordinatak</td>";
+	htmltext += "<td>WGS84 koordinatak<br>(kulso)</td>";
+	htmltext += "<td>WGS84 koordinatak<br>(belso)</td>";
 	htmltext += "<td>Letöltes</td>";
 	htmltext += "</thead>";
 	var i = 0;
@@ -188,13 +211,30 @@ function szamol(){
 		htmltext += "<td><textarea id='foldnev"+i+"' cols='20'>";
 		htmltext += terulet.value;
 		htmltext += "</textarea></td>";
-		htmltext += "<td><textarea id='eov_"+i+"' cols='20'>";
-		console.log(terulet.polygon);
-		htmltext += terulet.polygon.join("\n");	
+		
+		// Outer boundary EOV
+		htmltext += "<td><textarea id='eov_outer_"+i+"' cols='20'>";
+		htmltext += terulet.polygon.join("\n");
 		htmltext += "</textarea></td>";
+		
+		// Inner boundary EOV (first inner only)
+		htmltext += "<td><textarea id='eov_inner_"+i+"' cols='20'>";
+		if(terulet.innerPolygons.length > 0) {
+			htmltext += terulet.innerPolygons[0].join("\n");
+		}
+		htmltext += "</textarea></td>";
+		
 		htmltext += '<td><input type = "button" onclick = "szamolfold('+i+')" value = "Szamolj>>"></td>'
-		htmltext += "<td><textarea id='WGS84OUT"+i+"' cols='30'></textarea></td>";
+		
+		// Outer boundary WGS84
+		htmltext += "<td><textarea id='WGS84OUT_outer_"+i+"' cols='30'></textarea></td>";
+		
+		// Inner boundary WGS84
+		htmltext += "<td><textarea id='WGS84OUT_inner_"+i+"' cols='30'></textarea></td>";
+		
 		htmltext += '<td><input type = "button" onclick = "downloadAsKML('+i+')" value = "KML">';
+		htmltext += '<input type = "button" onclick = "downloadAsWGS84SHP('+i+')" value = "WGS84 Shape">';
+		htmltext += '<input type = "button" onclick = "downloadAsWGS84SHPWithInner('+i+')" value = "WGS84 Shape (Inner)">';
 		htmltext += '<input type = "button" onclick = "displayField('+i+')" value = "Megjelenit"><input type = "button" onclick = "egyesit('+i+')" value = "Kombinalt"></td>';
 		htmltext +="</tr>";
 		i++;
@@ -205,77 +245,117 @@ function szamol(){
 
 }
 function egyesit(j) {
-	document.getElementById('WGS84OUTKOMBI').value += document.getElementById('WGS84OUT'+j).value;
+	document.getElementById('WGS84OUTKOMBI').value += document.getElementById('WGS84OUT_outer_'+j).value;
 	document.getElementById('WGS84OUTKOMBI').value += '\n';
 }
 
 function szamolfold(j) {
 
 	var lines = document.getElementById('eov_'+j).value.split("\n");
+	var boundaryIndex = 0;
+	var pointInBoundary = 0;
 
 	for(var i = 0; i <= lines.length;i++){
-		if( lines[i] == undefined || lines[i].length < 10) continue;
-		if(i != lines.length){
-			var splitby	 = ' ';
-			var eov = lines[i].split(splitby);
-				document.getElementById('WGS84OUT'+j).value+= i+' \n';
-				transformData(j,i, eov[1],eov[0],0);				
-		} else {
-			var eov = lines[0].split(splitby);
-			document.getElementById('WGS84OUT'+j).value+='aa'+i+'aa \n';
-			transformData(j,'aa'+i  +'aa', eov[1],eov[0],0);				
+		// Check for comma separator (inner boundary marker)
+		if(lines[i] && lines[i].trim() === ',') {
+			boundaryIndex++;
+			pointInBoundary = 0;
+			document.getElementById('WGS84OUT'+j).value+= ',\n';
+			continue;
 		}
+		
+		if( lines[i] == undefined || lines[i].length < 10) continue;
+		var splitby	 = ' ';
+		var eov = lines[i].split(splitby);
+		document.getElementById('WGS84OUT'+j).value+= pointInBoundary+' \n';
+		transformData(j,pointInBoundary, eov[1],eov[0],0);
+		pointInBoundary++;
 	}
 }
 
 function szamolfoldBulk1() {
 	console.log("SZamolFoldBulk1() ")
 	for(var i = 0; i < 1000; i++){
-		if(document.getElementById('eov_'+i) != null)
+		if(document.getElementById('eov_outer_'+i) != null)
 			szamolfoldBulk(i);
 	}
 }
 
 function szamolfoldBulk(j) {
-	console.log("Calculating for entry: " + j + "  " + document.getElementById('eov_'+j).value);
-	var lines = document.getElementById('eov_'+j).value.split("\n");
+	// Process outer boundary
+	var outerLines = document.getElementById('eov_outer_'+j).value.split("\n");
+	var outerJsonArray = [];
 
-	var jsonArray = [];
-
-	for(var i = 0; i <= lines.length;i++){
-		if( lines[i] == undefined || lines[i].length < 10) continue;
-		if(i != lines.length){
-			var splitby	 = ' ';
-			var eov = lines[i].split(splitby);
-			var obj = new Object();
-		   	obj.pointNumber = i;
-   			obj.y = Number(eov[0]);
-   			obj.x = Number(eov[1]);
-   			obj.h = 0;
-   			obj.remark = "";
-   			jsonArray.push(obj);
-//			document.getElementById('WGS84OUT'+j).value+= i+' \n';
-		} else {
-   			jsonArray.push(jsonArray[0]);
-//			document.getElementById('WGS84OUT'+j).value+=(i+1)+' \n';
-		}
+	for(var i = 0; i < outerLines.length; i++){
+		if(outerLines[i] == undefined || outerLines[i].length < 10) continue;
+		var splitby = ' ';
+		var eov = outerLines[i].split(splitby);
+		var obj = new Object();
+		obj.pointNumber = i;
+		obj.y = Number(eov[0]);
+		obj.x = Number(eov[1]);
+		obj.h = 0;
+		obj.remark = "";
+		outerJsonArray.push(obj);
 	}
-	transformDataBulk(j, jsonArray);
+	// Close outer boundary
+	if(outerJsonArray.length > 0) {
+		outerJsonArray.push(outerJsonArray[0]);
+	}
+	transformDataBulk(j, outerJsonArray, 'outer');
+	
+	// Process inner boundary if exists
+	var innerElement = document.getElementById('eov_inner_'+j);
+	if(innerElement && innerElement.value.trim().length > 0) {
+		var innerLines = innerElement.value.split("\n");
+		var innerJsonArray = [];
+
+		for(var i = 0; i < innerLines.length; i++){
+			if(innerLines[i] == undefined || innerLines[i].length < 10) continue;
+			var splitby = ' ';
+			var eov = innerLines[i].split(splitby);
+			var obj = new Object();
+			obj.pointNumber = i;
+			obj.y = Number(eov[0]);
+			obj.x = Number(eov[1]);
+			obj.h = 0;
+			obj.remark = "";
+			innerJsonArray.push(obj);
+		}
+		// Close inner boundary
+		if(innerJsonArray.length > 0) {
+			innerJsonArray.push(innerJsonArray[0]);
+		}
+		transformDataBulk(j, innerJsonArray, 'inner');
+	}
 }
+
 function displayField1(){
 	for(var i = 0; i < 300; i++){
-		if(document.getElementById('eov_'+i) != null)
+		if(document.getElementById('eov_outer_'+i) != null)
 			displayField(i);
 	}
 }
 
 function displayField(j){
-	var coordinates = document.getElementById('WGS84OUT'+j).value.replaceAll(",0","").split("\n");
+	var coordinates = document.getElementById('WGS84OUT_outer_'+j).value.replaceAll(",0","").replaceAll("(","").replaceAll(")","").split("\n");
 	var data = "[";
-	for(var i = 0; i <= coordinates.length;i++){
-		if(String(coordinates[i]).length < 10) continue;
-		if(data.length > 5) data += ',';
-		data += '[' + coordinates[i] + ']';
+	for(var i = 0; i < coordinates.length; i++){
+		// Check if element exists
+		if(coordinates[i] == undefined) continue;
+		
+		// Skip empty lines
+		if(coordinates[i].trim().length === 0) continue;
+		// Stop at comma separator (inner boundary marker)
+		if(coordinates[i].trim() === ',' || coordinates[i].trim() === ', ') break;
+		if(coordinates[i].trim().length < 10) continue;
+		
+		// Validate coordinate format
+		var parts = coordinates[i].split(',');
+		if(parts.length >= 2 && !isNaN(Number(parts[0])) && !isNaN(Number(parts[1]))) {
+			if(data.length > 5) data += ',';
+			data += '[' + coordinates[i] + ']';
+		}
 	}
 	data += "]";
 	var tempGeo = geoSample;
@@ -318,7 +398,7 @@ function teszt(){
 	console.log(res);
 
 }
-function transformDataBulk(i, data){
+function transformDataBulk(i, data, target){
 	/*
 	curl --location 
 		--request POST 
@@ -326,32 +406,29 @@ function transformDataBulk(i, data){
 		--header 'Content-Type: application/json' 
 		--data-raw '[{"pointNumber":"1","y":722440.365 , "x": 184418.844,"h":57.460,"remark":""}]'
 	*/
-	console.log(data);
+	console.log("Transforming for target:", target, data);
 	fetch('https://eht2.gnssnet.hu/api/transformation/eov-to-etrs89', 
 		{method: "POST", headers: { "Content-Type": "application/json"},body: JSON.stringify(data)})
   .then(response => {
     if (!response.ok) {
       throw new Error('Network response was not OK');
     }
-//    console.log(response);
-//    console.log(response.json());
     return response.json();
   })
   .then(data => {
     // Process the retrieved data
     var str = "";
-    var str1 = "";
     for(var j = 0; j < data.length;j++){
-    	if(j!=0) {str1+="\n"; str+="\n";}
-	    str1 += data[j].pointNumber + ","; 
-	    str += data[j].lon + ','+data[j].lat +',0';
-	    str1 += data[j].lon + ','+data[j].lat +',0';
+      if(j!=0) {str+="\n";}
+      str += data[j].lon + ','+data[j].lat +',0';
     }
-    document.getElementById('WGS84OUT'+i).value = str;
-    console.log("Results for entry: " + j + " " + str1);
+    
+    // Write to the correct textarea based on target
+    var targetTextarea = 'WGS84OUT_' + target + '_' + i;
+    document.getElementById(targetTextarea).value = str;
+    console.log("Results for entry: " + i + " (" + target + ") " + str);
   })
   .catch(error => {
-    // Handle any errors that occurred during the request
     console.error('Error:', error);
   });
 }
@@ -439,17 +516,30 @@ function downloadAsKML(i){
 }
 function downloadAsKML(i, s){
 const element = document.createElement('a');
-var datacsv = document.getElementById('WGS84OUT'+i).value;
+var datacsv = document.getElementById('WGS84OUT_outer_'+i).value;
 console.log(datacsv);
 if(s){
-	var coordinates = String(datacsv).split("\n");
+	var coordinates = String(datacsv).replaceAll("(","").replaceAll(")","").split("\n");
 	var data = "[";
 	for(var j = 0; j <= coordinates.length;j++){
+		// Skip empty lines
+		if(String(coordinates[j]).trim().length === 0) continue;
+		// Stop at comma separator
+		if(coordinates[j].trim() === ',' || coordinates[j].trim() === ', ') break;
 		if(String(coordinates[j]).length < 10) continue;
-		if(data.length > 5) data += ',';
-		data += '[' + coordinates[j] + ']';
+		
+		// Validate coordinate format
+		var parts = coordinates[j].split(',');
+		if(parts.length >= 2 && !isNaN(Number(parts[0])) && !isNaN(Number(parts[1]))) {
+			if(data.length > 5) data += ',';
+			data += '[' + coordinates[j] + ']';
+		}
 	}
 	data += "]";
+	if(data === "[]") {
+		alert("No valid coordinates found!");
+		return;
+	}
 	var points = turf.points(JSON.parse(data));
 	console.log(points);
 	//var terulet = turf.concave(points).geometry.coordinates[0];
@@ -464,8 +554,31 @@ if(s){
 		datacsv += terulet[j][1];
 		datacsv += ',0 ';
 	}
+} else {
+	// For non-simplified version, stop at first comma separator and validate coordinates
+	var lines = datacsv.split("\n");
+	datacsv = "";
+	for(var j = 0; j < lines.length; j++){
+		// Skip empty lines
+		if(lines[j].trim().length === 0) continue;
+		// Stop at comma separator
+		if(lines[j].trim() === ',' || lines[j].trim() === ', ') break;
+		
+		// Validate coordinate format
+		var parts = lines[j].split(',');
+		if(parts.length >= 2 && !isNaN(Number(parts[0])) && !isNaN(Number(parts[1]))) {
+			datacsv += lines[j] + '\n';
+		}
+	}
 }
-datacsv = datacsv.replaceAll('\n',' ');
+// Remove parentheses and normalize for KML output
+datacsv = datacsv.replaceAll('(','').replaceAll(')','').replaceAll('\n',' ');
+// Remove multiple spaces and normalize separators
+datacsv = datacsv.replace(/\s+/g, ' ').trim();
+// Remove trailing commas before closing tags
+datacsv = datacsv.replace(/,\s*</g, '<');
+// Remove trailing commas in coordinate list
+datacsv = datacsv.replace(/,\s*$/, '');
 
 console.log(document.getElementById('foldnev'+i));
 
@@ -501,6 +614,175 @@ element.style.display = 'none';
 document.body.appendChild(element);
 element.click();
 document.body.removeChild(element);
+}
+
+async function downloadAsWGS84SHP(j) {
+  var lines = document.getElementById('WGS84OUT_outer_'+j).value.split("\n");
+  const geojson = {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": []
+          },
+          "properties": {
+            "name": "TODO teszt"
+          }
+        }
+      ]
+    };
+  geojson.features[0].properties.name = document.getElementById('foldnev'+j).value;
+  var jsonArray = [];
+  for(var i = 0; i < lines.length; i++){
+    // Check if line exists and is not empty
+    if(lines[i] == undefined || lines[i].trim().length === 0) continue;
+    
+    var trimmedLine = lines[i].trim();
+    
+    // Skip parentheses
+    if(trimmedLine === '(' || trimmedLine === ')') continue;
+    // Stop processing at comma separator - ignore inner boundaries
+    if(trimmedLine === ',' || trimmedLine === ', ') break;
+    
+    var splitby = ',';
+    var wgs = lines[i].split(splitby);
+    // Make sure we have valid coordinates (at least 2 values)
+    if(wgs.length >= 2 && !isNaN(Number(wgs[0])) && !isNaN(Number(wgs[1]))) {
+      var obj = [];
+      obj.push(Number(wgs[0]));
+      obj.push(Number(wgs[1]));
+      jsonArray.push(obj);
+    }
+  }
+  // Only close polygon if we have coordinates
+  if(jsonArray.length > 0) {
+    jsonArray.push(jsonArray[0]);
+    geojson.features[0].geometry.coordinates.push(jsonArray);
+  }
+
+  const fileName = document.getElementById('foldnev'+j).value;
+  
+  console.log(JSON.stringify(geojson));
+  // Convert GeoJSON to Shapefile (ZIP format)
+  const shapefileBase64 = await shpwrite.zip(geojson, {folder: 'wgs84_'+fileName, types: {polygon: fileName, point: fileName, polyline: fileName}});
+  // Decode the Base64 content to binary
+  const shapefileBinary = base64ToArrayBuffer(shapefileBase64);
+  // Create a download link and trigger the download
+  const blob = new Blob([shapefileBinary], { type: 'application/zip' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'wgs84_'+fileName+'.zip';
+  link.click();
+
+  // Clean up the object URL
+  URL.revokeObjectURL(link.href);
+}
+
+async function downloadAsWGS84SHPWithInner(j) {
+  // Get outer and inner boundary data from separate textareas
+  var outerContent = document.getElementById('WGS84OUT_outer_'+j).value;
+  var innerContent = document.getElementById('WGS84OUT_inner_'+j).value;
+  
+  const geojson = {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": []
+          },
+          "properties": {
+            "name": document.getElementById('foldnev'+j).value
+          }
+        }
+      ]
+    };
+  
+  // Process outer boundary
+  var outerLines = outerContent.split("\n");
+  var outerJsonArray = [];
+  
+  console.log("Processing outer boundary with " + outerLines.length + " lines");
+  
+  for(var i = 0; i < outerLines.length; i++){
+    if(outerLines[i] == undefined || outerLines[i].trim().length === 0) continue;
+    
+    var parts = outerLines[i].split(',');
+    
+    if(parts.length >= 2) {
+      var lon = Number(parts[0].trim());
+      var lat = Number(parts[1].trim());
+      
+      if(!isNaN(lon) && !isNaN(lat)) {
+        outerJsonArray.push([lon, lat]);
+      }
+    }
+  }
+  
+  // Close outer polygon
+  if(outerJsonArray.length > 0) {
+    outerJsonArray.push(outerJsonArray[0]);
+    geojson.features[0].geometry.coordinates.push(outerJsonArray);
+    console.log("Outer boundary: " + outerJsonArray.length + " points");
+  }
+  
+  // Process inner boundary if exists
+  if(innerContent && innerContent.trim().length > 0) {
+    var innerLines = innerContent.split("\n");
+    var innerJsonArray = [];
+    
+    console.log("Processing inner boundary with " + innerLines.length + " lines");
+    
+    for(var i = 0; i < innerLines.length; i++){
+      if(innerLines[i] == undefined || innerLines[i].trim().length === 0) continue;
+      
+      var parts = innerLines[i].split(',');
+      
+      if(parts.length >= 2) {
+        var lon = Number(parts[0].trim());
+        var lat = Number(parts[1].trim());
+        
+        if(!isNaN(lon) && !isNaN(lat)) {
+          innerJsonArray.push([lon, lat]);
+        }
+      }
+    }
+    
+    // Close inner polygon
+    if(innerJsonArray.length > 0) {
+      innerJsonArray.push(innerJsonArray[0]);
+      geojson.features[0].geometry.coordinates.push(innerJsonArray);
+      console.log("Inner boundary: " + innerJsonArray.length + " points");
+    }
+  }
+
+  const fileName = document.getElementById('foldnev'+j).value;
+  
+  console.log("Final GeoJSON:", geojson);
+  
+  // Convert to Shapefile
+  const shapefileBase64 = await shpwrite.zip(geojson, {folder: 'wgs84_'+fileName+'_inner', types: {polygon: fileName+'_inner', point: fileName+'_inner', polyline: fileName+'_inner'}});
+  const shapefileBinary = base64ToArrayBuffer(shapefileBase64);
+  const blob = new Blob([shapefileBinary], { type: 'application/zip' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'wgs84_'+fileName+'_inner.zip';
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+// Utility to decode Base64 to binary (Uint8Array)
+function base64ToArrayBuffer(base64) {
+  const binaryString = atob(base64); // Decode Base64 string
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
 }
 
 
