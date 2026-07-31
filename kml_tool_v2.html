@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KML Tool V2</title>
+
+  <script src="https://unpkg.com/@tmcw/togeojson@6.0.0/dist/togeojson.umd.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    :root {
+      --bg:#0f172a; --panel:#111827; --panel2:#1f2937; --text:#e5e7eb;
+      --muted:#9ca3af; --green:#22c55e; --blue:#3b82f6; --red:#ef4444;
+      --orange:#f59e0b; --border:#374151;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Arial,Helvetica,sans-serif; background:var(--bg); color:var(--text); }
+    .wrap { max-width:1500px; margin:auto; padding:20px; }
+    h1 { margin:0 0 8px; font-size:28px; }
+    .sub,.small,.note,.status { color:var(--muted); }
+    .sub { margin-bottom:18px; }
+    .grid { display:grid; grid-template-columns:490px 1fr; gap:16px; }
+    .panel { background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:16px; }
+    .panel h2 { margin:0 0 12px; font-size:18px; }
+    .dropzone { border:2px dashed var(--border); border-radius:14px; padding:18px; text-align:center; margin-bottom:12px; }
+    .dropzone.dragover { border-color:var(--blue); background:rgba(59,130,246,.1); }
+    .toolbar-grid,.split-grid { display:grid; grid-template-columns:1fr 160px; gap:8px; margin:10px 0; }
+    .split-controls { border:1px solid var(--border); border-radius:12px; padding:12px; margin-top:8px; background:rgba(255,255,255,.02); }
+    .mode-row { display:grid; grid-template-columns:1fr; gap:7px; margin-bottom:10px; }
+    .mode-option { display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--border); border-radius:9px; cursor:pointer; }
+    .mode-option:has(input:checked) { border-color:var(--green); background:rgba(34,197,94,.08); }
+    .mode-panel { display:none; }
+    .mode-panel.active { display:block; }
+    .field-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    button,.file-label,input[type=text],input[type=number],select {
+      border:1px solid var(--border); background:var(--panel2); color:var(--text);
+      padding:10px 12px; border-radius:10px; font-size:14px; width:100%;
+    }
+    button,.file-label { cursor:pointer; width:auto; }
+    button:hover,.file-label:hover { filter:brightness(1.08); }
+    .primary { background:#14532d; border-color:#166534; }
+    .blue { background:#1d4ed8; border-color:#2563eb; }
+    .danger { background:#7f1d1d; border-color:#b91c1c; }
+    .warn { background:#78350f; border-color:#b45309; }
+    input[type=file] { display:none; }
+    .btnrow { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+    .status { min-height:22px; margin:8px 0 10px; white-space:pre-wrap; line-height:1.4; }
+    .list,.strips-list { max-height:28vh; overflow:auto; border:1px solid var(--border); border-radius:12px; }
+    .item { padding:10px 12px; border-bottom:1px solid rgba(255,255,255,.06); display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:start; cursor:pointer; }
+    .item:last-child { border-bottom:0; }
+    .item:hover { background:rgba(255,255,255,.04); }
+    .name { font-weight:bold; word-break:break-word; }
+    .meta { font-size:12px; color:var(--muted); margin-top:4px; line-height:1.45; }
+    .section-title { margin:16px 0 8px; font-weight:bold; font-size:15px; }
+    .note { margin-top:8px; font-size:12px; line-height:1.45; }
+    #map { width:100%; height:82vh; border-radius:14px; overflow:hidden; background:#0b1220; position:relative; }
+    .legend { position:absolute; left:12px; bottom:12px; z-index:500; padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:rgba(17,24,39,.92); font-size:13px; }
+    .poly-label { background:rgba(17,24,39,.82); border:1px solid rgba(255,255,255,.12); color:#fff; border-radius:6px; padding:2px 6px; box-shadow:none; font-weight:bold; }
+    .poly-label:before { display:none; }
+    .poly-label-hidden { display:none; }
+    .edge-length-label {
+      background:rgba(15,23,42,.88);
+      border:1px solid rgba(255,255,255,.22);
+      color:#fff;
+      border-radius:6px;
+      padding:2px 5px;
+      box-shadow:none;
+      font-size:11px;
+      font-weight:bold;
+      white-space:nowrap;
+    }
+    .edge-length-label:before { display:none; }
+    .vertex-marker {
+      width:9px;
+      height:9px;
+      border-radius:50%;
+      background:#fff;
+      border:2px solid #111827;
+      box-shadow:0 0 0 1px rgba(255,255,255,.5);
+    }
+    .summary-box { margin-top:8px; padding:9px 10px; border-radius:9px; background:rgba(59,130,246,.08); border:1px solid rgba(59,130,246,.35); font-size:12px; line-height:1.45; }
+    @media(max-width:1100px) {
+      .grid { grid-template-columns:1fr; }
+      #map { height:55vh; }
+      .toolbar-grid,.split-grid,.field-row { grid-template-columns:1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>KML Tool V2</h1>
+  <div class="sub">Többlépéses polygon-munkaterület: betöltés, térképi kijelölés, összevonás, ismételt felosztás, Undo/Redo és projektmentés.</div>
+
+  <div class="grid">
+    <div class="panel">
+      <h2>Fájlok és polygonok</h2>
+
+      <div id="dropzone" class="dropzone">
+        <strong>Dobd ide a KML vagy KMZ fájlokat</strong>
+        <div class="small" style="margin:8px 0 12px">vagy</div>
+        <label class="file-label" for="fileInput">Fájlok kiválasztása</label>
+        <input id="fileInput" type="file" accept=".kml,.kmz" multiple>
+      </div>
+
+      <div class="toolbar-grid">
+        <input id="searchInput" type="text" placeholder="Keresés név vagy hrsz alapján...">
+        <select id="sortSelect">
+          <option value="az">Rendezés: A–Z</option>
+          <option value="za">Rendezés: Z–A</option>
+          <option value="area_desc">Terület: nagy→kicsi</option>
+          <option value="area_asc">Terület: kicsi→nagy</option>
+          <option value="file_az">Fájl: A–Z</option>
+        </select>
+      </div>
+
+      <div class="btnrow">
+        <button id="selectAllBtn">Összes kijelölése</button>
+        <button id="selectNoneBtn">Kijelölés törlése</button>
+        <button id="mergeBtn" class="primary">Kijelöltek összevonása</button>
+        <button id="downloadBtn" class="blue" disabled>Utolsó eredmény KML</button>
+        <button id="exportWorkspaceBtn" class="blue">Látható munkaterület KML</button>
+        <button id="undoBtn" disabled>Visszavonás</button>
+        <button id="redoBtn" disabled>Újra</button>
+        <button id="hideSelectedBtn">Kijelöltek elrejtése</button>
+        <button id="showAllBtn">Minden megjelenítése</button>
+        <button id="deleteSelectedBtn" class="danger">Kijelöltek törlése</button>
+        <button id="saveProjectBtn">Projekt mentése</button>
+        <label class="file-label" for="projectInput">Projekt betöltése</label>
+        <input id="projectInput" type="file" accept=".json,.kmlproject">
+        <button id="clearBtn" class="danger">Minden törlése</button>
+      </div>
+
+      <div id="status" class="status">Még nincs betöltött fájl.</div>
+      <div id="workspaceSummary" class="summary-box">Munkaterület: 0 polygon.</div>
+      <div id="list" class="list"></div>
+      <div class="section-title">Művelettörténet</div>
+      <div id="historyList" class="strips-list"></div>
+
+      <div class="section-title">Felosztás sávokra / területekre</div>
+      <div class="split-controls">
+        <div class="mode-row">
+          <label class="mode-option"><input type="radio" name="splitMode" value="width" checked> Felosztás sávszélesség alapján (m)</label>
+          <label class="mode-option"><input type="radio" name="splitMode" value="area"> Felosztás célterület alapján (m²)</label>
+          <label class="mode-option"><input type="radio" name="splitMode" value="count"> Felosztás egyenlő darabszámra</label>
+        </div>
+
+        <div id="modeWidth" class="mode-panel active">
+          <div class="field-row">
+            <input id="stripWidthInput" type="number" min="0.1" step="0.1" value="18" placeholder="Egyforma sávszélesség (m)">
+            <input id="customWidthsInput" type="text" placeholder="Kézi szélességek: 108,maradék">
+          </div>
+          <div class="note">A kézi lista elsőbbséget élvez. Példa: <b>108,122</b> vagy <b>108,maradék</b>.</div>
+        </div>
+
+        <div id="modeArea" class="mode-panel">
+          <div class="field-row">
+            <input id="targetAreaInput" type="number" min="1" step="100" value="40000" placeholder="Célterület (m²)">
+            <select id="areaRemainderMode">
+              <option value="separate">Maradék legyen külön rész</option>
+              <option value="balance">Terület elosztása közel egyenlően</option>
+            </select>
+          </div>
+          <div class="note">Példa: 40 000 m² = 4 ha. A vágás helyét a tényleges polygonterület alapján keresi meg.</div>
+        </div>
+
+        <div id="modeCount" class="mode-panel">
+          <input id="partCountInput" type="number" min="2" step="1" value="4" placeholder="Részek száma">
+          <div class="note">A program a kiválasztott oldalról indulva azonos területű részeket készít.</div>
+        </div>
+
+        <div id="splitPreview" class="summary-box">Válassz ki egy polygont és egy kiinduló oldalt.</div>
+      </div>
+
+      <div class="btnrow">
+        <button id="pickLineBtn" class="warn">Irányvonal kijelölése (2 pont)</button>
+        <button id="clearLineBtn">Irányvonal törlése</button>
+        <button id="splitBtn" class="primary">Kiválasztott polygon felosztása</button>
+        <button id="downloadAllStripsBtn" class="blue" disabled>Összes rész KML</button>
+      </div>
+
+      <div class="section-title">Kiválasztott polygon oldalhosszai</div>
+      <div id="edgesList" class="strips-list"></div>
+
+      <div class="section-title">Legenerált részek</div>
+      <div id="stripsList" class="strips-list"></div>
+    </div>
+
+    <div class="panel" style="padding:12px">
+      <div id="map">
+        <div class="legend">
+          Kék: betöltött polygonok<br>
+          Zöld: kijelölt polygonok<br>
+          Piros: összevont eredmény<br>
+          Narancs: felosztott részek<br>
+          Fehér: aktív kiinduló oldal
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const fileInput=$('fileInput'), dropzone=$('dropzone'), listEl=$('list'), stripsListEl=$('stripsList');
+const edgesListEl=$('edgesList'), statusEl=$('status'), downloadBtn=$('downloadBtn');
+const downloadAllStripsBtn=$('downloadAllStripsBtn'), searchInput=$('searchInput'), sortSelect=$('sortSelect');
+const stripWidthInput=$('stripWidthInput'), customWidthsInput=$('customWidthsInput');
+const targetAreaInput=$('targetAreaInput'), partCountInput=$('partCountInput');
+const areaRemainderMode=$('areaRemainderMode'), splitPreview=$('splitPreview');
+const workspaceSummary=$('workspaceSummary'), historyListEl=$('historyList'), projectInput=$('projectInput');
+
+let features=[], mergedFeature=null, mergedKmlText='', nextId=1, searchQuery='', sortMode='az';
+let operationHistory=[], redoHistory=[], operationLog=[];
+let splitModeArmed=false, splitLinePoints=[], splitStrips=[], activeStripId=null, activeEdgeId=null, activeEdge=null;
+const LABEL_MIN_ZOOM=17;
+const EDGE_DETAILS_MIN_ZOOM=18;
+
+const map=L.map('map');
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  maxZoom:22, attribution:'&copy; OpenStreetMap közreműködők', referrerPolicy:'strict-origin-when-cross-origin'
+}).addTo(map);
+map.setView([47.2,19.5],7);
+
+function mapLabelText(feature){
+  const name=feature?.properties?.__displayName||feature?.properties?.name||'Terület';
+  let areaText='';
+  try{
+    const areaHa=turf.area(feature)/10000;
+    areaText=areaHa.toLocaleString('hu-HU',{
+      minimumFractionDigits:2,
+      maximumFractionDigits:2
+    })+' ha';
+  }catch{}
+  return `<strong>${escapeHtml(name)}</strong><br>${escapeHtml(areaText)}`;
+}
+function bindFeatureInteractions(feature,layer){
+  const label=mapLabelText(feature);
+  if(label) layer.bindTooltip(label,{
+    permanent:true,
+    direction:'center',
+    className:'poly-label poly-label-hidden'
+  });
+  layer.on('click',()=>{
+    const id=feature?.properties?.__id;
+    const target=features.find(f=>f.properties.__id===id);
+    if(!target)return;
+    target.properties.__selected=!target.properties.__selected;
+    renderAll();
+  });
+}
+const loadedLayer=L.geoJSON(null,{
+  style:f=>({color:f?.properties?.__selected?'#22c55e':'#3b82f6',weight:f?.properties?.__selected?3:2,fillOpacity:.16}),
+  onEachFeature:bindFeatureInteractions
+}).addTo(map);
+const selectedLayer=L.geoJSON(null,{style:()=>({color:'#22c55e',weight:3,fillOpacity:.22}),onEachFeature:bindFeatureInteractions}).addTo(map);
+const resultLayer=L.geoJSON(null,{style:()=>({color:'#ef4444',weight:4,fillOpacity:.18})}).addTo(map);
+const stripsLayer=L.geoJSON(null,{
+  style:f=>({color:f?.properties?.__stripId===activeStripId?'#f8fafc':'#f59e0b',weight:f?.properties?.__stripId===activeStripId?4:2,fillOpacity:.17}),
+  onEachFeature:(f,l)=>{
+    l.bindTooltip(f.properties?.name||`Rész ${f.properties?.__stripId}`,{direction:'center'});
+    l.on('click',()=>{activeStripId=f.properties.__stripId;renderStripsList();refreshMap();});
+  }
+}).addTo(map);
+const splitLineLayer=L.layerGroup().addTo(map);
+const edgeDetailsLayer=L.layerGroup().addTo(map);
+let edgeSnapLayer=null;
+
+function updateStatus(text){ statusEl.textContent=text; }
+function cloneState(){
+  return JSON.parse(JSON.stringify({features,mergedFeature,mergedKmlText,nextId,splitStrips,activeStripId,activeEdgeId,activeEdge,splitLinePoints,operationLog}));
+}
+function restoreState(state){
+  features=state.features||[]; mergedFeature=state.mergedFeature||null; mergedKmlText=state.mergedKmlText||'';
+  nextId=state.nextId||1; splitStrips=state.splitStrips||[]; activeStripId=state.activeStripId??null;
+  activeEdgeId=state.activeEdgeId??null; activeEdge=state.activeEdge||null; splitLinePoints=state.splitLinePoints||[];
+  operationLog=state.operationLog||[];
+  downloadBtn.disabled=!mergedKmlText;
+}
+function updateHistoryButtons(){
+  $('undoBtn').disabled=!operationHistory.length;
+  $('redoBtn').disabled=!redoHistory.length;
+}
+function saveOperationState(description='Művelet'){
+  operationHistory.push(cloneState());
+  if(operationHistory.length>50)operationHistory.shift();
+  redoHistory=[];
+  operationLog.push({time:new Date().toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit'}),description});
+  if(operationLog.length>100)operationLog.shift();
+  updateHistoryButtons();
+}
+function undoLastOperation(){
+  const state=operationHistory.pop();
+  if(!state)return;
+  redoHistory.push(cloneState());
+  restoreState(state);
+  updateHistoryButtons();renderAll();fitMap();updateStatus('Az utolsó művelet visszavonva.');
+}
+function redoLastOperation(){
+  const state=redoHistory.pop();
+  if(!state)return;
+  operationHistory.push(cloneState());
+  restoreState(state);
+  updateHistoryButtons();renderAll();fitMap();updateStatus('A művelet újra végrehajtva.');
+}
+function renderHistory(){
+  historyListEl.innerHTML='';
+  if(!operationLog.length){historyListEl.innerHTML='<div class="item"><div></div><div class="small">Még nincs munkaterületi művelet.</div><div></div></div>';return;}
+  [...operationLog].reverse().slice(0,20).forEach((entry,index)=>{
+    const row=document.createElement('div');row.className='item';
+    row.innerHTML=`<div>${operationLog.length-index}</div><div><div class="name">${escapeHtml(entry.description)}</div><div class="meta">${escapeHtml(entry.time)}</div></div><div></div>`;
+    historyListEl.appendChild(row);
+  });
+}
+function makeWorkspaceFeature(f,name,selected=false){
+  const c=JSON.parse(JSON.stringify(f));
+  c.properties=c.properties||{};
+  c.properties.__id=nextId++;
+  c.properties.__file='Műveleti eredmény';
+  c.properties.__selected=selected;
+  c.properties.__displayName=name||c.properties.name||`Eredmény #${c.properties.__id}`;
+  c.properties.name=c.properties.__displayName;
+  c.properties.__workspaceResult=true;
+  return c;
+}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function escapeXml(s){return String(s).replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&apos;'}[c]));}
+function sanitizeFilename(s){return String(s).replace(/[\\/:*?"<>|]+/g,'_').replace(/\s+/g,' ').trim();}
+function safeName(p,fallback){return p?.name||p?.Name||p?.NAME||p?.hrsz||fallback;}
+function polygonAreaM2(f){try{return turf.area(f)}catch{return null}}
+function polygonAreaHectares(f){const a=polygonAreaM2(f);return a==null?null:a/10000;}
+function currentMode(){return document.querySelector('input[name="splitMode"]:checked').value;}
+
+async function readPossiblyKmz(file){
+  if(file.name.toLowerCase().endsWith('.kml'))return file.text();
+  const zip=await JSZip.loadAsync(await file.arrayBuffer());
+  const entry=Object.values(zip.files).find(e=>!e.dir&&e.name.toLowerCase().endsWith('.kml'));
+  if(!entry)throw new Error('A KMZ-ben nincs KML fájl.');
+  return entry.async('string');
+}
+function parseKmlText(text,fileName){
+  const xml=new DOMParser().parseFromString(text,'text/xml');
+  if(xml.querySelector('parsererror'))throw new Error(`Hibás KML: ${fileName}`);
+  const gj=toGeoJSON.kml(xml), out=[];
+  for(const f of gj.features||[]){
+    if(!f.geometry||!['Polygon','MultiPolygon'].includes(f.geometry.type))continue;
+    const c=JSON.parse(JSON.stringify(f));
+    c.properties=c.properties||{};
+    c.properties.__id=nextId++;
+    c.properties.__file=fileName;
+    c.properties.__selected=false;
+    c.properties.__displayName=safeName(c.properties,`${fileName} #${c.properties.__id}`);
+    out.push(c);
+  }
+  return out;
+}
+async function handleFiles(fileList){
+  const files=[...fileList].filter(f=>/\.(kml|kmz)$/i.test(f.name));
+  if(!files.length)return updateStatus('Nem találtam KML vagy KMZ fájlt.');
+  let added=0; const errors=[];
+  for(const file of files){
+    try{const parsed=parseKmlText(await readPossiblyKmz(file),file.name);features.push(...parsed);added+=parsed.length;}
+    catch(e){errors.push(`${file.name}: ${e.message}`);}
+  }
+  if(added){operationLog.push({time:new Date().toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit'}),description:`${added} polygon betöltése`});}
+  renderAll(); fitMap();
+  updateStatus(`${files.length} fájl feldolgozva, ${added} polygon betöltve.${errors.length?'\n'+errors.join('\n'):''}`);
+}
+function featureSearchText(f){
+  return [f.properties?.__displayName,f.properties?.__file,f.properties?.hrsz,f.properties?.name].filter(Boolean).join(' ').toLowerCase();
+}
+function getFilteredFeatures(){
+  return features.filter(f=>f.properties?.__visible!==false).filter(f=>!searchQuery||featureSearchText(f).includes(searchQuery)).slice().sort((a,b)=>{
+    const na=(a.properties.__displayName||'').toLowerCase(), nb=(b.properties.__displayName||'').toLowerCase();
+    const fa=(a.properties.__file||'').toLowerCase(), fb=(b.properties.__file||'').toLowerCase();
+    const aa=polygonAreaM2(a)||0, ab=polygonAreaM2(b)||0;
+    if(sortMode==='za')return nb.localeCompare(na,'hu');
+    if(sortMode==='area_desc')return ab-aa;
+    if(sortMode==='area_asc')return aa-ab;
+    if(sortMode==='file_az')return fa.localeCompare(fb,'hu')||na.localeCompare(nb,'hu');
+    return na.localeCompare(nb,'hu');
+  });
+}
+function renderList(){
+  listEl.innerHTML='';
+  const data=getFilteredFeatures();
+  if(!data.length){listEl.innerHTML='<div class="item"><div></div><div class="small">Nincs megjeleníthető polygon.</div><div></div></div>';return;}
+  for(const f of data){
+    const row=document.createElement('div'); row.className='item';
+    const cb=document.createElement('input');cb.type='checkbox';cb.checked=!!f.properties.__selected;
+    cb.onclick=e=>e.stopPropagation();
+    cb.onchange=()=>{f.properties.__selected=cb.checked;renderAll();};
+    const area=polygonAreaHectares(f);
+    const info=document.createElement('div');
+    info.innerHTML=`<div class="name">${escapeHtml(f.properties.__displayName)}</div>
+      <div class="meta">Fájl: ${escapeHtml(f.properties.__file)}<br>Terület: ${area==null?'ismeretlen':area.toFixed(3)+' ha'}</div>`;
+    const act=document.createElement('div'), dl=document.createElement('button');dl.textContent='Letöltés';
+    dl.onclick=e=>{e.stopPropagation();downloadFeatureAsKml(f,sanitizeFilename(f.properties.__displayName)+'.kml');};
+    act.appendChild(dl);row.append(cb,info,act);row.onclick=()=>zoomToFeature(f);listEl.appendChild(row);
+  }
+}
+function getPrimaryRingCoordinates(f){
+  if(f?.geometry?.type==='Polygon')return f.geometry.coordinates?.[0]||[];
+  if(f?.geometry?.type==='MultiPolygon'){
+    let best=[],bestArea=-1;
+    for(const p of f.geometry.coordinates||[]){try{const a=turf.area(turf.polygon([p[0]]));if(a>bestArea){bestArea=a;best=p[0];}}catch{}}
+    return best;
+  }
+  return [];
+}
+function getFeatureEdges(f){
+  const ring=getPrimaryRingCoordinates(f),out=[];
+  for(let i=0;i<ring.length-1;i++){
+    out.push({id:i+1,start:ring[i],end:ring[i+1],length_m:turf.distance(turf.point(ring[i]),turf.point(ring[i+1]),{units:'meters'})});
+  }
+  return out;
+}
+function getSplitTargetFeature(){
+  const selected=features.filter(f=>f.properties.__visible!==false&&f.properties.__selected);
+  if(selected.length===1)return selected[0];
+  if(mergedFeature)return mergedFeature;
+  if(selected.length>1)throw new Error('A felosztáshoz pontosan 1 polygon legyen kijelölve, vagy használd az összevont eredményt.');
+  throw new Error('Jelölj ki 1 polygont, vagy készíts összevont eredményt.');
+}
+function setActiveEdge(edge){
+  activeEdge=edge; activeEdgeId=edge?.id??null; splitLinePoints=edge?[edge.start,edge.end]:[];
+  updateSplitPreview();
+}
+function renderEdgesList(){
+  edgesListEl.innerHTML='';
+  let target;try{target=getSplitTargetFeature();}catch{}
+  if(!target){edgesListEl.innerHTML='<div class="item"><div></div><div class="small">A kijelölt polygon oldalai itt jelennek meg.</div><div></div></div>';return;}
+  for(const edge of getFeatureEdges(target)){
+    const row=document.createElement('div');row.className='item';
+    const mark=document.createElement('div');mark.textContent=edge.id===activeEdgeId?'●':'○';
+    const info=document.createElement('div');info.innerHTML=`<div class="name">Oldal ${edge.id}</div><div class="meta">Hossz: ${edge.length_m.toFixed(2)} m</div>`;
+    const act=document.createElement('div'),btn=document.createElement('button');btn.textContent='Irány ehhez';
+    btn.onclick=e=>{e.stopPropagation();setActiveEdge(edge);renderAll();updateStatus(`Az ${edge.id}. oldal lett a kiinduló él.`);};
+    act.appendChild(btn);row.append(mark,info,act);row.onclick=()=>{setActiveEdge(edge);renderAll();zoomToEdge(edge);};edgesListEl.appendChild(row);
+  }
+}
+function renderStripsList(){
+  stripsListEl.innerHTML='';downloadAllStripsBtn.disabled=!splitStrips.length;
+  if(!splitStrips.length){stripsListEl.innerHTML='<div class="item"><div></div><div class="small">Még nincs generált rész.</div><div></div></div>';return;}
+  for(const s of splitStrips){
+    const row=document.createElement('div');row.className='item';
+    const mark=document.createElement('div');mark.textContent=s.properties.__stripId===activeStripId?'●':'○';
+    const a=polygonAreaM2(s)||0;
+    const width=s.properties.strip_width_m;
+    const info=document.createElement('div');
+    info.innerHTML=`<div class="name">${escapeHtml(s.properties.name)}</div>
+      <div class="meta">Terület: ${a.toFixed(0)} m² (${(a/10000).toFixed(3)} ha)${Number.isFinite(width)?`<br>Átlagos sávszélesség: ${width.toFixed(2)} m`:''}</div>`;
+    const act=document.createElement('div'),dl=document.createElement('button');dl.textContent='Letöltés';
+    dl.onclick=e=>{e.stopPropagation();downloadFeatureAsKml(s,sanitizeFilename(s.properties.name)+'.kml');};
+    act.appendChild(dl);row.append(mark,info,act);
+    row.onclick=()=>{activeStripId=s.properties.__stripId;renderStripsList();refreshMap();zoomToFeature(s);};
+    stripsListEl.appendChild(row);
+  }
+}
+
+function midpointCoord(a,b){
+  return [(a[0]+b[0])/2,(a[1]+b[1])/2];
+}
+function updateEdgeDetails(){
+  edgeDetailsLayer.clearLayers();
+  if(map.getZoom()<EDGE_DETAILS_MIN_ZOOM)return;
+
+  let target;
+  try{target=getSplitTargetFeature();}catch{return;}
+
+  const edges=getFeatureEdges(target);
+  const ring=getPrimaryRingCoordinates(target);
+  if(!edges.length||ring.length<2)return;
+
+  for(const edge of edges){
+    const mid=midpointCoord(edge.start,edge.end);
+    L.tooltip({
+      permanent:true,
+      direction:'center',
+      className:'edge-length-label',
+      opacity:1
+    })
+    .setLatLng([mid[1],mid[0]])
+    .setContent(`${edge.length_m.toFixed(1)} m`)
+    .addTo(edgeDetailsLayer);
+  }
+
+  for(const c of ring.slice(0,-1)){
+    L.marker([c[1],c[0]],{
+      interactive:false,
+      icon:L.divIcon({
+        className:'',
+        html:'<div class="vertex-marker"></div>',
+        iconSize:[9,9],
+        iconAnchor:[4.5,4.5]
+      })
+    }).addTo(edgeDetailsLayer);
+  }
+}
+
+function refreshMap(){
+  loadedLayer.clearLayers();selectedLayer.clearLayers();resultLayer.clearLayers();stripsLayer.clearLayers();splitLineLayer.clearLayers();edgeDetailsLayer.clearLayers();
+  if(edgeSnapLayer){map.removeLayer(edgeSnapLayer);edgeSnapLayer=null;}
+  const visibleFeatures=features.filter(f=>f.properties?.__visible!==false);
+  if(visibleFeatures.length)loadedLayer.addData({type:'FeatureCollection',features:visibleFeatures});
+  const selected=features.filter(f=>f.properties.__visible!==false&&f.properties.__selected);
+  if(selected.length)selectedLayer.addData({type:'FeatureCollection',features:selected});
+  if(mergedFeature)resultLayer.addData(mergedFeature);
+  if(splitStrips.length)stripsLayer.addData({type:'FeatureCollection',features:splitStrips});
+  if(splitLinePoints.length===2){
+    L.polyline(splitLinePoints.map(c=>[c[1],c[0]]),{color:'#f8fafc',weight:3,dashArray:'6,6'}).addTo(splitLineLayer);
+  }
+  try{
+    const edges=getFeatureEdges(getSplitTargetFeature());
+    for(const e of edges)L.polyline([[e.start[1],e.start[0]],[e.end[1],e.end[0]]],{color:e.id===activeEdgeId?'#f8fafc':'#60a5fa',weight:e.id===activeEdgeId?4:2,opacity:.85}).addTo(splitLineLayer);
+    edgeSnapLayer=L.geoJSON({type:'FeatureCollection',features:edges.map(e=>({type:'Feature',properties:{edgeId:e.id},geometry:{type:'LineString',coordinates:[e.start,e.end]}}))},{
+      style:()=>({color:'#000',weight:20,opacity:.001}),
+      onEachFeature:(f,l)=>l.on('click',ev=>{
+        L.DomEvent.stop(ev);const e=edges.find(x=>x.id===f.properties.edgeId);if(e){setActiveEdge(e);splitModeArmed=false;renderAll();}
+      })
+    }).addTo(map);
+  }catch{}
+  updateLabelVisibility();
+  updateEdgeDetails();
+}
+function renderWorkspaceSummary(){
+  const visible=features.filter(f=>f.properties?.__visible!==false);
+  const selected=visible.filter(f=>f.properties?.__selected);
+  const totalArea=visible.reduce((sum,f)=>sum+(polygonAreaM2(f)||0),0);
+  workspaceSummary.textContent=`Munkaterület: ${visible.length} látható / ${features.length} összes polygon · ${selected.length} kijelölve · látható terület: ${(totalArea/10000).toLocaleString('hu-HU',{maximumFractionDigits:3})} ha`;
+}
+function renderAll(){renderList();renderEdgesList();renderStripsList();renderHistory();renderWorkspaceSummary();refreshMap();updateSplitPreview();}
+function updateLabelVisibility(){
+  const show=map.getZoom()>=LABEL_MIN_ZOOM;
+  document.querySelectorAll('.leaflet-tooltip.poly-label').forEach(e=>e.classList.toggle('poly-label-hidden',!show));
+}
+function fitMap(){const g=L.featureGroup([loadedLayer,resultLayer,stripsLayer]);const b=g.getBounds();if(b.isValid())map.fitBounds(b.pad(.2));}
+function zoomToFeature(f){try{const b=L.geoJSON(f).getBounds();if(b.isValid())map.fitBounds(b.pad(.3));}catch{}}
+function zoomToEdge(e){const b=L.polyline([[e.start[1],e.start[0]],[e.end[1],e.end[0]]]).getBounds();if(b.isValid())map.fitBounds(b.pad(1.2));}
+
+function normalizeToPolygonalFeature(f){
+  if(!f?.geometry||!['Polygon','MultiPolygon'].includes(f.geometry.type))throw new Error('Nem támogatott geometria.');
+  return f;
+}
+function mergeSelected(){
+  const selected=features.filter(f=>f.properties.__selected);
+  if(!selected.length)return updateStatus('Előbb jelölj ki legalább egy polygont.');
+  try{
+    let current=JSON.parse(JSON.stringify(selected[0]));
+    for(let i=1;i<selected.length;i++){
+      const next=JSON.parse(JSON.stringify(selected[i]));
+      let union=null;try{union=turf.union(current,next);}catch{}
+      if(union?.geometry)current=union;
+      else current=turf.combine(turf.featureCollection([current,next])).features[0];
+    }
+    saveOperationState();
+    const mergedName=`Egyesített (${selected.map(f=>f.properties.__displayName).slice(0,4).join(' + ')})`;
+    current.properties={name:mergedName,merged_count:selected.length};
+    selected.forEach(f=>{f.properties.__selected=false;f.properties.__visible=false;});
+    const workspaceMerged=makeWorkspaceFeature(current,mergedName,true);
+    features.push(workspaceMerged);
+    mergedFeature=workspaceMerged;mergedKmlText=geojsonFeatureToKml(workspaceMerged);downloadBtn.disabled=false;
+    splitStrips=[];activeStripId=null;setActiveEdge(null);renderAll();fitMap();
+    updateStatus(`Kész. ${selected.length} polygon összevonva. Az eredmény bekerült a munkaterületre és kijelölve maradt. Terület: ${(turf.area(workspaceMerged)/10000).toFixed(3)} ha.`);
+  }catch(e){updateStatus(`Hiba az összevonás közben: ${e.message}`);}
+}
+
+function ringToKmlCoords(r){return r.map(c=>`${c[0]},${c[1]},${c[2]||0}`).join(' ');}
+function polygonToKml(p){
+  return `<Polygon><outerBoundaryIs><LinearRing><coordinates>${ringToKmlCoords(p[0]||[])}</coordinates></LinearRing></outerBoundaryIs>`+
+    p.slice(1).map(r=>`<innerBoundaryIs><LinearRing><coordinates>${ringToKmlCoords(r)}</coordinates></LinearRing></innerBoundaryIs>`).join('')+'</Polygon>';
+}
+function geojsonFeatureToKml(f){
+  const name=escapeXml(f.properties?.name||'Polygon');
+  const geom=f.geometry.type==='Polygon'?polygonToKml(f.geometry.coordinates):
+    `<MultiGeometry>${f.geometry.coordinates.map(p=>polygonToKml(p)).join('')}</MultiGeometry>`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${name}</name><Placemark><name>${name}</name>${geom}</Placemark></Document></kml>`;
+}
+function featureCollectionToKml(fs,name='Export'){
+  const placemarks=fs.map(f=>{
+    const n=escapeXml(f.properties?.name||'Polygon');
+    const g=f.geometry.type==='Polygon'?polygonToKml(f.geometry.coordinates):`<MultiGeometry>${f.geometry.coordinates.map(p=>polygonToKml(p)).join('')}</MultiGeometry>`;
+    return `<Placemark><name>${n}</name>${g}</Placemark>`;
+  }).join('');
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${escapeXml(name)}</name>${placemarks}</Document></kml>`;
+}
+function downloadText(content,filename,mime){
+  const url=URL.createObjectURL(new Blob([content],{type:mime}));const a=document.createElement('a');
+  a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+}
+function downloadFeatureAsKml(f,n){downloadText(geojsonFeatureToKml(f),n,'application/vnd.google-earth.kml+xml');}
+
+function parseCustomWidths(){
+  const raw=customWidthsInput.value.trim();if(!raw)return[];
+  return raw.split(',').map(x=>x.trim()).filter(Boolean).map(t=>{
+    if(['maradek','maradék','remainder','rest'].includes(t.toLowerCase()))return'remainder';
+    const n=Number(t.replace(',','.'));if(!Number.isFinite(n)||n<=0)throw new Error('A kézi szélességeknél pozitív szám vagy „maradék” használható.');
+    return n;
+  });
+}
+function pointCoord(p){return p.geometry.coordinates;}
+function measureDepthFromEdge(base,edge){
+  const ring=getPrimaryRingCoordinates(base).slice(0,-1),line=turf.lineString([edge.start,edge.end]);
+  return ring.reduce((m,c)=>Math.max(m,turf.pointToLineDistance(turf.point(c),line,{units:'meters'})),0);
+}
+function prepareBandContext(base,edge){
+  const bbox=turf.bbox(base);
+  const diag=turf.distance(turf.point([bbox[0],bbox[1]]),turf.point([bbox[2],bbox[3]]),{units:'kilometers'});
+  const lineLengthKm=Math.max(diag*4,1);
+  const bearing=turf.bearing(turf.point(edge.start),turf.point(edge.end));
+  const totalDepth=measureDepthFromEdge(base,edge);
+
+  function bandWithDirection(fromM,toM,dir){
+    const perp=bearing+dir;
+    const p1=pointCoord(turf.destination(turf.point(edge.start),fromM/1000,perp,{units:'kilometers'}));
+    const p2=pointCoord(turf.destination(turf.point(edge.end),fromM/1000,perp,{units:'kilometers'}));
+    const p3=pointCoord(turf.destination(turf.point(edge.end),toM/1000,perp,{units:'kilometers'}));
+    const p4=pointCoord(turf.destination(turf.point(edge.start),toM/1000,perp,{units:'kilometers'}));
+    const q1=pointCoord(turf.destination(turf.point(p1),lineLengthKm/2,bearing+180,{units:'kilometers'}));
+    const q2=pointCoord(turf.destination(turf.point(p2),lineLengthKm/2,bearing,{units:'kilometers'}));
+    const q3=pointCoord(turf.destination(turf.point(p3),lineLengthKm/2,bearing,{units:'kilometers'}));
+    const q4=pointCoord(turf.destination(turf.point(p4),lineLengthKm/2,bearing+180,{units:'kilometers'}));
+    return turf.polygon([[q1,q2,q3,q4,q1]]);
+  }
+
+  let direction=90;
+  try{
+    const probe=Math.max(Math.min(totalDepth*.08,10),1);
+    const a90=turf.area(turf.intersect(base,bandWithDirection(0,probe,90))||turf.polygon([[[0,0],[0,0],[0,0],[0,0]]]));
+    const am90=turf.area(turf.intersect(base,bandWithDirection(0,probe,-90))||turf.polygon([[[0,0],[0,0],[0,0],[0,0]]]));
+    direction=a90>=am90?90:-90;
+  }catch{}
+  return {totalDepth,band:(fromM,toM)=>bandWithDirection(fromM,toM,direction)};
+}
+function clipBand(base,ctx,fromM,toM){
+  try{return turf.intersect(base,ctx.band(fromM,toM));}catch{return null;}
+}
+function cumulativeArea(base,ctx,toM){
+  const clipped=clipBand(base,ctx,0,toM);return clipped?.geometry?turf.area(clipped):0;
+}
+function findOffsetForArea(base,ctx,targetArea,low,high){
+  let lo=low,hi=high;
+  for(let i=0;i<42;i++){
+    const mid=(lo+hi)/2;
+    if(cumulativeArea(base,ctx,mid)<targetArea)lo=mid;else hi=mid;
+  }
+  return (lo+hi)/2;
+}
+function createPartsFromOffsets(base,ctx,offsets,label){
+  const parts=[];
+  for(let i=0;i<offsets.length-1;i++){
+    const clipped=clipBand(base,ctx,offsets[i],offsets[i+1]);
+    if(!clipped?.geometry||turf.area(clipped)<1)continue;
+    clipped.properties={
+      ...(clipped.properties||{}),
+      name:`${base.properties?.name||base.properties?.__displayName||'polygon'} - ${label} ${String(parts.length+1).padStart(2,'0')}`,
+      __stripId:parts.length+1,
+      strip_width_m:offsets[i+1]-offsets[i],
+      source_name:base.properties?.name||base.properties?.__displayName||'polygon'
+    };
+    parts.push(clipped);
+  }
+  return parts;
+}
+function splitByWidths(base,edge){
+  const ctx=prepareBandContext(base,edge),spec=parseCustomWidths(),width=Number(stripWidthInput.value);
+  if(!spec.length&&(!Number.isFinite(width)||width<=0))throw new Error('Adj meg pozitív sávszélességet.');
+  let widths=[];
+  if(spec.length){
+    let used=0;
+    for(const x of spec){if(x==='remainder')widths.push(Math.max(ctx.totalDepth-used,0));else{widths.push(x);used+=x;}}
+  }else{
+    const count=Math.floor(ctx.totalDepth/width);
+    widths=Array(count).fill(width);
+    const rest=ctx.totalDepth-count*width;if(rest>.25)widths.push(rest);
+  }
+  widths=widths.filter(x=>x>.25);
+  const offsets=[0];for(const w of widths)offsets.push(Math.min(ctx.totalDepth,offsets.at(-1)+w));
+  if(offsets.at(-1)<ctx.totalDepth-.25)offsets.push(ctx.totalDepth);
+  return {parts:createPartsFromOffsets(base,ctx,[...new Set(offsets)],'sáv'),ctx};
+}
+function splitByArea(base,edge){
+  const requested=Number(targetAreaInput.value);
+  if(!Number.isFinite(requested)||requested<=0)throw new Error('Adj meg pozitív célterületet m²-ben.');
+  const total=turf.area(base),ctx=prepareBandContext(base,edge);
+  let targetAreas=[];
+  if(areaRemainderMode.value==='balance'){
+    const n=Math.max(1,Math.round(total/requested));
+    targetAreas=Array(n).fill(total/n);
+  }else{
+    const full=Math.floor(total/requested);
+    targetAreas=Array(full).fill(requested);
+    const rest=total-full*requested;
+    if(rest>1)targetAreas.push(rest);
+    if(!targetAreas.length)targetAreas=[total];
+  }
+  const offsets=[0];let cumulative=0;
+  for(let i=0;i<targetAreas.length-1;i++){
+    cumulative+=targetAreas[i];
+    offsets.push(findOffsetForArea(base,ctx,cumulative,offsets.at(-1),ctx.totalDepth));
+  }
+  offsets.push(ctx.totalDepth);
+  return {parts:createPartsFromOffsets(base,ctx,offsets,'rész'),ctx,targetAreas};
+}
+function splitByCount(base,edge){
+  const count=Math.round(Number(partCountInput.value));
+  if(!Number.isFinite(count)||count<2)throw new Error('A részek száma legalább 2 legyen.');
+  const total=turf.area(base),each=total/count,ctx=prepareBandContext(base,edge),offsets=[0];
+  for(let i=1;i<count;i++)offsets.push(findOffsetForArea(base,ctx,each*i,offsets.at(-1),ctx.totalDepth));
+  offsets.push(ctx.totalDepth);
+  return {parts:createPartsFromOffsets(base,ctx,offsets,'rész'),ctx,targetAreas:Array(count).fill(each)};
+}
+function splitSelectedFeature(){
+  try{
+    const target=normalizeToPolygonalFeature(JSON.parse(JSON.stringify(getSplitTargetFeature())));
+    if(!activeEdge)throw new Error('Előbb válassz ki egy polygon oldalt kiinduló élnek.');
+    const mode=currentMode();
+    const result=mode==='width'?splitByWidths(target,activeEdge):mode==='area'?splitByArea(target,activeEdge):splitByCount(target,activeEdge);
+    if(!result.parts.length)throw new Error('Nem sikerült részeket létrehozni.');
+    saveOperationState(`Polygon felosztása (${result.parts.length} rész)`);
+    const sourceInWorkspace=features.find(f=>f.properties.__id===target.properties.__id);
+    if(sourceInWorkspace){sourceInWorkspace.properties.__selected=false;sourceInWorkspace.properties.__visible=false;}
+    features.forEach(f=>f.properties.__selected=false);
+    splitStrips=result.parts.map((part,index)=>makeWorkspaceFeature(part,part.properties.name||`Rész ${index+1}`,false));
+    features.push(...splitStrips);
+    mergedFeature=null;mergedKmlText='';downloadBtn.disabled=true;
+    activeStripId=splitStrips[0].properties.__stripId;setActiveEdge(null);renderAll();fitMap();
+    const areas=splitStrips.map(s=>turf.area(s));
+    updateStatus(`Kész. ${splitStrips.length} rész készült és bekerült a munkaterületre. Jelöld ki azt a részt, amelyiket másik AB egyenessel tovább akarod osztani. Területek: ${areas.map(a=>Math.round(a).toLocaleString('hu-HU')+' m²').join(', ')}.`);
+  }catch(e){console.error(e);updateStatus(`Hiba a felosztás közben: ${e.message}`);}
+}
+function updateSplitPreview(){
+  try{
+    const target=getSplitTargetFeature(),total=turf.area(target),mode=currentMode();
+    let text=`Kiválasztott terület: ${Math.round(total).toLocaleString('hu-HU')} m² (${(total/10000).toFixed(3)} ha). `;
+    if(mode==='area'){
+      const a=Number(targetAreaInput.value);
+      if(a>0){
+        if(areaRemainderMode.value==='balance'){
+          const n=Math.max(1,Math.round(total/a));text+=`Várhatóan ${n} közel egyforma rész, kb. ${Math.round(total/n).toLocaleString('hu-HU')} m²/rész.`;
+        }else{
+          const n=Math.ceil(total/a);text+=`Várhatóan ${n} rész; az utolsó lehet kisebb.`;
+        }
+      }
+    }else if(mode==='count'){
+      const n=Math.round(Number(partCountInput.value));if(n>0)text+=`Cél: ${n} rész, kb. ${Math.round(total/n).toLocaleString('hu-HU')} m²/rész.`;
+    }else text+='Méterszélesség szerinti felosztás.';
+    if(!activeEdge)text+=' Kiinduló oldal még nincs kiválasztva.';
+    splitPreview.textContent=text;
+  }catch{splitPreview.textContent='Válassz ki egy polygont és egy kiinduló oldalt.';}
+}
+function exportWorkspace(){
+  const visible=features.filter(f=>f.properties?.__visible!==false);
+  if(!visible.length)return updateStatus('Nincs exportálható, látható polygon.');
+  downloadText(featureCollectionToKml(visible,'KML Tool V2 munkaterület'),'kml_tool_workspace.kml','application/vnd.google-earth.kml+xml');
+}
+function hideSelected(){
+  const selected=features.filter(f=>f.properties?.__visible!==false&&f.properties?.__selected);
+  if(!selected.length)return updateStatus('Nincs kijelölt polygon.');
+  saveOperationState(`${selected.length} polygon elrejtése`);
+  selected.forEach(f=>{f.properties.__visible=false;f.properties.__selected=false;});
+  setActiveEdge(null);renderAll();updateStatus(`${selected.length} polygon elrejtve.`);
+}
+function showAllFeatures(){
+  const hidden=features.filter(f=>f.properties?.__visible===false);
+  if(!hidden.length)return updateStatus('Nincs elrejtett polygon.');
+  saveOperationState(`${hidden.length} polygon megjelenítése`);
+  hidden.forEach(f=>f.properties.__visible=true);renderAll();fitMap();updateStatus(`${hidden.length} polygon ismét látható.`);
+}
+function deleteSelected(){
+  const ids=new Set(features.filter(f=>f.properties?.__visible!==false&&f.properties?.__selected).map(f=>f.properties.__id));
+  if(!ids.size)return updateStatus('Nincs kijelölt polygon.');
+  saveOperationState(`${ids.size} polygon törlése`);
+  features=features.filter(f=>!ids.has(f.properties.__id));
+  splitStrips=splitStrips.filter(f=>!ids.has(f.properties.__id));
+  mergedFeature=null;mergedKmlText='';downloadBtn.disabled=true;setActiveEdge(null);renderAll();fitMap();updateStatus(`${ids.size} polygon törölve.`);
+}
+function saveProject(){
+  const project={format:'kml-tool-v2',version:2,savedAt:new Date().toISOString(),state:cloneState(),operationHistory,redoHistory};
+  downloadText(JSON.stringify(project,null,2),'kml_tool_project.kmlproject','application/json');
+}
+async function loadProjectFile(file){
+  try{
+    const project=JSON.parse(await file.text());
+    if(project?.format!=='kml-tool-v2'||!project.state)throw new Error('Ez nem KML Tool V2 projektfájl.');
+    restoreState(project.state);operationHistory=project.operationHistory||[];redoHistory=project.redoHistory||[];
+    updateHistoryButtons();renderAll();fitMap();updateStatus(`Projekt betöltve: ${features.length} polygon.`);
+  }catch(e){updateStatus(`Projektbetöltési hiba: ${e.message}`);}
+  projectInput.value='';
+}
+function clearAll(){
+  features=[];mergedFeature=null;mergedKmlText='';nextId=1;operationHistory=[];redoHistory=[];operationLog=[];updateHistoryButtons();splitModeArmed=false;splitLinePoints=[];splitStrips=[];
+  activeStripId=null;activeEdgeId=null;activeEdge=null;downloadBtn.disabled=true;renderAll();updateStatus('Minden törölve.');
+}
+
+document.querySelectorAll('input[name="splitMode"]').forEach(r=>r.onchange=()=>{
+  document.querySelectorAll('.mode-panel').forEach(p=>p.classList.remove('active'));
+  $({width:'modeWidth',area:'modeArea',count:'modeCount'}[currentMode()]).classList.add('active');
+  updateSplitPreview();
+});
+[targetAreaInput,partCountInput,stripWidthInput,customWidthsInput,areaRemainderMode].forEach(e=>{
+  e.addEventListener('input',updateSplitPreview);e.addEventListener('change',updateSplitPreview);
+});
+$('selectAllBtn').onclick=()=>{getFilteredFeatures().forEach(f=>f.properties.__selected=true);renderAll();};
+$('selectNoneBtn').onclick=()=>{getFilteredFeatures().forEach(f=>f.properties.__selected=false);renderAll();};
+$('mergeBtn').onclick=mergeSelected;
+$('downloadBtn').onclick=()=>mergedKmlText&&downloadText(mergedKmlText,'merged.kml','application/vnd.google-earth.kml+xml');
+$('undoBtn').onclick=undoLastOperation;
+$('redoBtn').onclick=redoLastOperation;
+$('exportWorkspaceBtn').onclick=exportWorkspace;
+$('hideSelectedBtn').onclick=hideSelected;
+$('showAllBtn').onclick=showAllFeatures;
+$('deleteSelectedBtn').onclick=deleteSelected;
+$('saveProjectBtn').onclick=saveProject;
+projectInput.onchange=e=>e.target.files?.[0]&&loadProjectFile(e.target.files[0]);
+$('clearBtn').onclick=clearAll;
+$('pickLineBtn').onclick=()=>{splitModeArmed=true;setActiveEdge(null);splitStrips=[];renderAll();updateStatus('Kattints 2 pontot a térképen, vagy kattints közvetlenül egy polygon oldalára.');};
+$('clearLineBtn').onclick=()=>{splitModeArmed=false;setActiveEdge(null);renderAll();updateStatus('Irányvonal törölve.');};
+$('splitBtn').onclick=splitSelectedFeature;
+downloadAllStripsBtn.onclick=()=>{
+  if(!splitStrips.length)return;
+  const name=splitStrips[0].properties.source_name||'parts';
+  downloadText(featureCollectionToKml(splitStrips,`${name} parts`),sanitizeFilename(`${name} parts`)+'.kml','application/vnd.google-earth.kml+xml');
+};
+searchInput.oninput=e=>{searchQuery=e.target.value.trim().toLowerCase();renderList();};
+sortSelect.onchange=e=>{sortMode=e.target.value;renderList();};
+fileInput.onchange=e=>handleFiles(e.target.files);
+['dragenter','dragover'].forEach(evt=>dropzone.addEventListener(evt,e=>{e.preventDefault();dropzone.classList.add('dragover');}));
+['dragleave','drop'].forEach(evt=>dropzone.addEventListener(evt,e=>{e.preventDefault();dropzone.classList.remove('dragover');}));
+dropzone.addEventListener('drop',e=>handleFiles(e.dataTransfer.files));
+map.on('click',e=>{
+  if(!splitModeArmed)return;
+  splitLinePoints.push([e.latlng.lng,e.latlng.lat]);
+  if(splitLinePoints.length===2){
+    activeEdgeId=null;activeEdge={id:'manual',start:splitLinePoints[0],end:splitLinePoints[1]};splitModeArmed=false;
+    updateStatus('Irányvonal kész. Indítható a felosztás.');
+  }else updateStatus('Első pont kész. Kattints a második pontra.');
+  refreshMap();updateSplitPreview();
+});
+map.on('zoomend',()=>{
+  updateLabelVisibility();
+  updateEdgeDetails();
+});
+map.whenReady(()=>renderAll());
+</script>
+</body>
+</html>
