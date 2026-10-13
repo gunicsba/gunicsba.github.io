@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AgOpenGPS letöltések • Downloads</title>
+  <meta name="description" content="AgOpenGPS, AOG-TaskController és AgIsoVirtualTerminal – a legfrissebb kiadások letöltése. Latest release downloads." />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/styles.css">
+  <style>
+    .wrap{max-width:820px}
+    .jump{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 18px}
+    .jump a{text-decoration:none}
+    .jump a:hover{color:var(--text)}
+    .prod{background:var(--card);border-radius:var(--radius);border:1px solid rgba(148,163,184,.18);box-shadow:var(--shadow);padding:20px;margin:0 0 16px;scroll-margin-top:16px}
+    .prod .kicker{font-size:12px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+    .prod h2{margin:4px 0 4px}
+    .prod .desc{color:var(--muted);font-size:14px;margin:0 0 14px}
+    .warn{background:rgba(251,191,36,.10);border:1px solid rgba(251,191,36,.45);border-radius:12px;padding:8px 12px;font-size:13px;margin:0 0 14px}
+    .warn b{color:#fbbf24}
+    .ver{font-size:clamp(17px,2.6vw,21px);font-weight:800;word-break:break-word}
+    .meta{color:var(--muted);font-size:14px;margin:2px 0 14px}
+    .btn{display:inline-flex;align-items:center;gap:10px;padding:13px 22px;border-radius:12px;font-weight:600;text-decoration:none;
+         background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;font-size:16px;box-shadow:var(--shadow)}
+    .btn:hover{filter:brightness(1.08)}
+    .prod a:focus-visible{outline:none;box-shadow:var(--ring)}
+    .sec{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:12px;font-size:14px}
+    .prod .sec a,.prod td a,.prod .note a{color:var(--accent);text-decoration:none}
+    .prod .sec a:hover,.prod td a:hover,.prod .note a:hover{text-decoration:underline}
+    .note{color:var(--muted);font-size:13px;margin-top:10px}
+    .err{color:#f87171;font-size:14px}
+    .pre{display:inline-block;font-size:11px;font-weight:600;padding:1px 7px;border-radius:999px;margin-left:6px;vertical-align:middle;
+         background:rgba(148,163,184,.15);color:var(--muted);border:1px solid rgba(148,163,184,.3)}
+    details{margin-top:14px}
+    summary{cursor:pointer;color:var(--muted);font-size:14px}
+    table{width:100%;border-collapse:collapse;font-size:14px;margin-top:6px}
+    th,td{text-align:left;padding:7px 6px;border-bottom:1px solid rgba(148,163,184,.18);vertical-align:top}
+    th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+    td{word-break:break-word}
+    .steps{color:var(--muted);font-size:14px;padding-left:20px}
+    .steps li{margin:4px 0}
+    @media (max-width:520px){ .hide-sm{display:none} .btn{width:100%;justify-content:center;box-sizing:border-box} .prod{padding:16px} }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <a class="logo" href="/" aria-label="gunicsba.github.io" style="text-decoration:none">AOG</a>
+      <div>
+        <h1 class="title">Letöltések · Downloads</h1>
+        <p class="subtitle">A legfrissebb kiadások egy helyen, közvetlenül a GitHubról. · Latest releases in one place, straight from GitHub.</p>
+      </div>
+    </header>
+
+    <nav class="jump" id="jump" aria-label="Termékek · Products"></nav>
+    <div id="products"></div>
+
+    <h2>Telepítés · Install</h2>
+    <ol class="steps">
+      <li>Ha a Windows SmartScreen figyelmeztet: <i>További információ → Futtatás mindenképp</i>. · If SmartScreen warns: <i>More info → Run anyway</i>.</li>
+      <li>A ZIP-et csomagold ki egy mappába (ne futtasd a ZIP-en belülről). · Extract the ZIP to a folder (do not run from inside the ZIP).</li>
+      <li>Közvetlen link a legújabb telepítőhöz · Direct link to the latest installer: <code>gunicsba.github.io/AOG/?dl</code> (<code>?dl=official</code>, <code>?dl=tc</code>, <code>?dl=vt</code>)</li>
+    </ol>
+
+    <footer class="foot">
+      <div class="links"><a href="/">← gunicsba.github.io</a></div>
+      <div class="links"><a href="/sectioncontrol.html">Section Control →</a></div>
+    </footer>
+  </div>
+
+  <script src="/assets/releases.js"></script>
+  <script>
+    const { releases, pick, find, esc, mb, day, ICON } = window.GH;
+
+    // main: the file behind the big button; extra: other files from the same release.
+    const PRODUCTS = [
+      {
+        key: 'agopengps', nav: 'AgOpenGPS (community)', repo: 'gunicsba/AgOpenGPS',
+        title: 'AgOpenGPS – tracksForTC közösségi build',
+        desc: 'Windows telepítő magyar és angol nyelvvel, a hivatalos 6.8.x-re és a tracksForTC fejlesztésekre épül. · Windows installer (HU/EN) built on the official 6.8.x plus the tracksForTC work.',
+        warn: '<b>NEM HIVATALOS</b> – nem az AgOpenGPS csapat adta ki, a hibákat a fork oldalán jelezd. · <b>UNOFFICIAL</b> – not released by the AgOpenGPS team, report problems on the fork.',
+        main: { re: /_Setup\.exe$/i, label: 'Setup.exe letöltése · Download' },
+        extra: [{ re: /\.zip$/i, label: 'ZIP' }]
+      },
+      {
+        key: 'official', nav: 'AgOpenGPS (official)', repo: 'AgOpenGPS-Official/AgOpenGPS',
+        title: 'AgOpenGPS – hivatalos · official',
+        desc: 'A hivatalos AgOpenGPS kiadás (ZIP, telepítő nélkül). · The official AgOpenGPS release (ZIP, no installer).',
+        main: { re: /\.zip$/i, label: 'ZIP letöltése · Download' }
+      },
+      {
+        key: 'tc', nav: 'AOG-TaskController', repo: 'AgOpenGPS-Official/AOG-TaskController',
+        title: 'AOG-TaskController',
+        desc: 'ISOBUS Task Controller az AgOpenGPS-hez (szakaszvezérlés PCAN adapterrel). · ISOBUS Task Controller for AgOpenGPS (section control via PCAN adapter).',
+        main: { re: /-win64\.exe$/i, label: 'win64.exe letöltése · Download' },
+        extra: [{ re: /linux-x86_64/i, label: 'Linux x86_64' }, { re: /linux-aarch64/i, label: 'Linux ARM64' }],
+        beta: { repo: 'gunicsba/AOG-TaskController', re: /-win64\.exe$/i, label: 'Teszt build · Test build (gunicsba)' },
+        more: '<a href="/ISOBUS/">ISOBUS beállítás és meghajtók · setup & drivers</a>'
+      },
+      {
+        key: 'vt', nav: 'AgIsoVT', repo: 'Open-Agriculture/AgIsoVirtualTerminal',
+        title: 'AgIsoVirtualTerminal',
+        desc: 'ISOBUS virtuális terminál (VT) PC-re. · ISOBUS Virtual Terminal for the PC.',
+        main: { re: /^Windows\.Installer\.zip$/i, label: 'Windows telepítő · installer (zip)' },
+        extra: [{ re: /OSX/i, label: 'macOS' }, { re: /Ubuntu\.24/i, label: 'Ubuntu 24.04' }, { re: /Ubuntu\.22/i, label: 'Ubuntu 22.04' }]
+      }
+    ];
+
+    const params = new URLSearchParams(location.search);
+    const dlKey = params.has('dl') ? (params.get('dl') || 'agopengps') : null;
+
+    const $ = id => document.getElementById(id);
+    $('jump').innerHTML = PRODUCTS.map(p => `<a class="chip" href="#${p.key}">${esc(p.nav)}</a>`).join('');
+    $('products').innerHTML = PRODUCTS.map(p => `
+      <section class="prod" id="${p.key}">
+        <div class="kicker"><a href="https://github.com/${p.repo}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">${esc(p.repo)}</a></div>
+        <h2>${esc(p.title)}</h2>
+        <p class="desc">${p.desc}</p>
+        ${p.warn ? `<div class="warn">${p.warn}</div>` : ''}
+        <div class="body"><p class="meta">Betöltés… · Loading…</p></div>
+      </section>`).join('');
+
+    PRODUCTS.forEach(p => {
+      const body = document.querySelector(`#${p.key} .body`);
+      releases(p.repo).then(list => {
+        const hit = pick(list, p.main.re, false) || pick(list, p.main.re, true);
+        if (!hit) throw new Error('nincs letölthető fájl · no downloadable file');
+        const { rel, asset } = hit;
+        const newer = pick(list, p.main.re, true);
+        const newestStable = list.find(r => !r.pre);
+        const extras = (p.extra || []).map(x => ({ x, a: find(rel, x.re) })).filter(e => e.a);
+
+        let h = `
+          <div class="ver">${esc(rel.tag)}${rel.pre ? '<span class="pre">pre-release</span>' : ''}</div>
+          <div class="meta">${day(rel.date)} · ${mb(asset.size)}</div>
+          <a class="btn" href="${esc(asset.url)}" title="${esc(asset.name)}">${ICON.replace(/15/g, '20')}${esc(p.main.label)}</a>
+          <div class="sec">
+            ${extras.map(e => `<a href="${esc(e.a.url)}" title="${esc(e.a.name)}">${esc(e.x.label)} (${mb(e.a.size)})</a>`).join('')}
+            <a href="${esc(rel.url)}" target="_blank" rel="noopener">Újdonságok · Release notes ↗</a>
+            ${p.more || ''}
+          </div>`;
+        if (newestStable && newestStable !== rel && !rel.pre && newestStable.date > rel.date)
+          h += `<div class="note">Újabb kiadás, még letölthető fájl nélkül · Newer release without files yet: <a href="${esc(newestStable.url)}" target="_blank" rel="noopener">${esc(newestStable.tag)} ↗</a></div>`;
+        if (newer && newer.rel !== rel)
+          h += `<div class="note">Béta · Beta: <a href="${esc(newer.asset.url)}">${esc(newer.rel.tag)}</a> (${day(newer.rel.date)})</div>`;
+        h += `<div class="note beta"></div>`;
+
+        const older = list.filter(r => find(r, p.main.re)).slice(0, 12);
+        if (older.length > 1) h += `
+          <details><summary>Korábbi kiadások · Older releases (${older.length})</summary>
+            <table><thead><tr><th>Verzió · Version</th><th class="hide-sm">Dátum · Date</th><th>Fájl · File</th></tr></thead><tbody>
+            ${older.map(r => { const a = find(r, p.main.re); return `<tr>
+              <td><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.tag)}</a>${r.pre ? '<span class="pre">pre</span>' : ''}</td>
+              <td class="hide-sm">${day(r.date)}</td>
+              <td><a href="${esc(a.url)}">${esc(a.name)}</a></td></tr>`; }).join('')}
+            </tbody></table>
+          </details>`;
+        body.innerHTML = h;
+
+        if (p.beta) releases(p.beta.repo).then(bl => {
+          const b = pick(bl, p.beta.re, true);
+          if (b) body.querySelector('.beta').innerHTML = `${esc(p.beta.label)}: <a href="${esc(b.asset.url)}" title="${esc(b.asset.name)}">${esc(b.rel.tag)}</a> (${day(b.rel.date)})`;
+        }).catch(() => {});
+
+        if (dlKey === p.key) location.href = asset.url;
+      }).catch(err => {
+        body.innerHTML = `<p class="err">A kiadások nem tölthetők be · Could not load releases (${esc(err.message)}).</p>
+          <a class="btn" href="https://github.com/${p.repo}/releases/latest" target="_blank" rel="noopener">GitHub → Latest release ↗</a>`;
+      });
+    });
+  </script>
+</body>
+</html>

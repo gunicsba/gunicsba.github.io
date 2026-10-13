@@ -42,6 +42,9 @@
       <p style="color: var(--muted); margin-bottom: 12px;">
         The standard way. AgOpenGPS acts as an ISOBUS Task Controller and sends section commands over the CAN bus to any ISOBUS-compliant implement. Requires a PCAN adapter.
       </p>
+      <a href="/img/isobus_agopen_tc_en.png" target="_blank" rel="noopener" title="Open image">
+        <img src="/img/isobus_agopen_tc_en.png" alt="ISOBUS + AgOpenGPS: the terminal's own TC is disabled and AOG-TaskController takes over task and section control, while the terminal stays the VT" style="display: block; width: 100%; max-width: 900px; height: auto; margin: 0 0 14px; border-radius: 12px; background: #fff;" />
+      </a>
       <div class="grid">
         <article class="card" data-tags="isobus task controller aog official">
           <a href="https://github.com/AgOpenGPS-Official/AOG-TaskController" target="_blank" rel="noopener">
@@ -50,6 +53,7 @@
             <p>Official ISOBUS Task Controller for AgOpenGPS. Controls sections on any ISOBUS implement via PCAN adapter.</p>
             <div class="tag">TC</div>
           </a>
+          <div class="gh-dl" data-repo="AgOpenGPS-Official/AOG-TaskController" data-asset="-win64\.exe$"></div>
         </article>
         <article class="card" data-tags="isobus hardware setup guide">
           <a href="/ISOBUS/">
@@ -81,6 +85,7 @@
             <p>Section control bridge for Bogballe spreaders via RS232 serial connection.</p>
             <div class="tag">BOGBALLE</div>
           </a>
+          <div class="gh-dl" data-repo="charlesquick/AOG-Bogballe-Bridge" data-asset="win-x64\.zip$"></div>
         </article>
         <article class="card" data-tags="rs232 tuvr bridge serial">
           <a href="https://github.com/gunicsba/AOG_TUVR_bridge/" target="_blank" rel="noopener">
@@ -89,6 +94,7 @@
             <p>Bridge for T&Uuml;VR (Hungarian) rate controllers. Translates AOG commands to serial protocol.</p>
             <div class="tag">TUVR</div>
           </a>
+          <div class="gh-dl" data-repo="gunicsba/AOG_TUVR_bridge" data-asset="\.exe$"></div>
         </article>
         <article class="card" data-tags="rs232 agtronik bridge serial">
           <a href="https://github.com/gunicsba/AOG_AGTronik_bridge/" target="_blank" rel="noopener">
@@ -97,6 +103,7 @@
             <p>Bridge for AGTronik rate controllers. Enables section control via serial communication.</p>
             <div class="tag">AGTRONIK</div>
           </a>
+          <div class="gh-dl" data-repo="gunicsba/AOG_AGTronik_bridge" data-asset="\.exe$"></div>
         </article>
         <article class="card" data-tags="rs232 hardi bridge serial section control">
           <a href="https://github.com/gunicsba/AOG_Hardi_SectionControl/" target="_blank" rel="noopener">
@@ -105,6 +112,7 @@
             <p>Serial bridge for Hardi sprayers. Implements Hardi's section control protocol over RS232 (this is the proper protocol &mdash; Hardi is not TUVR).</p>
             <div class="tag">HARDI</div>
           </a>
+          <div class="gh-dl" data-repo="gunicsba/AOG_Hardi_SectionControl" data-asset="^AOG-HARDI.*\.exe$"></div>
         </article>
         <article class="card" data-tags="rs232 asd amazone lh5500 bridge serial">
           <a href="https://github.com/gunicsba/AOG_ASD_Bridge" target="_blank" rel="noopener">
@@ -114,6 +122,7 @@
             <div class="tag">ASD</div>
             <div class="tag">WIP</div>
           </a>
+          <div class="gh-dl" data-repo="gunicsba/AOG_ASD_Bridge" data-asset="^AOG-ASD\.exe$"></div>
         </article>
       </div>
     </section>
@@ -139,6 +148,7 @@
             <p>Fork of the original with additional tweaks and fixes.</p>
             <div class="tag">FORK</div>
           </a>
+          <div class="gh-dl" data-repo="gunicsba/AOG_Amazone_CAN_SectionControl" data-asset="\.exe$"></div>
         </article>
         <article class="card" data-tags="can teejet radion 8140 boompilot matrix bridge section control direct">
           <a href="https://github.com/gunicsba/AOG_TeejetBoomPilot_Bridge" target="_blank" rel="noopener">
@@ -147,6 +157,7 @@
             <p>Section control for the TeeJet Radion 8140 rate controller. Stands in for the Matrix Pro 570GS BoomPilot over CAN (PCAN-USB) and reports the sections the Radion has actually opened back to AgOpenGPS.</p>
             <div class="tag">TEEJET</div>
           </a>
+          <div class="gh-dl" data-repo="gunicsba/AOG_TeejetBoomPilot_Bridge" data-asset="\.exe$"></div>
         </article>
       </div>
     </section>
@@ -197,6 +208,7 @@
             <p>Full rate controller with custom PCBs for complete sprayer control. Handles section control, rate control, and pressure regulation.</p>
             <div class="tag">FULL</div>
           </a>
+          <div class="gh-dl" data-repo="SK21/AOG_RC" data-asset="^RateControllerApp\.zip$"></div>
         </article>
       </div>
     </section>
@@ -248,6 +260,7 @@
     </footer>
   </div>
 
+  <script src="/assets/releases.js"></script>
   <script>
     document.querySelectorAll('.anchor-link').forEach(link => {
       link.addEventListener('click', e => {

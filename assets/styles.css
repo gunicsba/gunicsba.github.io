@@ -127,3 +127,14 @@ h2{margin:26px 4px 12px;font-size:clamp(18px,2.2vw,22px)}
 .anchor-link:hover {
   text-decoration: underline;
 }
+
+/* ===== GitHub release download buttons (assets/releases.js) ===== */
+
+.gh-dl{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:10px;min-height:30px;font-size:13px}
+.gh-dl a.gh-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:10px;font-weight:600;text-decoration:none;
+  background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff}
+.gh-dl a.gh-btn:hover{filter:brightness(1.08)}
+.gh-dl a.gh-pre{display:inline;color:var(--accent);text-decoration:none}
+.gh-dl a.gh-pre:hover{text-decoration:underline}
+.gh-dl a:focus-visible{outline:none;box-shadow:var(--ring)}
+.gh-meta{color:var(--muted)}
