@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Az oldal nem található</title>
+  <script>
+    // /aog, /aog/, /Aog/... → /AOG/ (a GitHub Pages kis-nagybetű érzékeny)
+    (function () {
+      var p = location.pathname, m = /^\/aog(\/.*)?$/i.exec(p);
+      if (m && p.indexOf('/AOG/') !== 0) location.replace('/AOG' + (m[1] || '/') + location.search + location.hash);
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo" aria-hidden="true">404</div>
+      <div>
+        <h1 class="title">Az oldal nem található</h1>
+        <p class="subtitle">Lehet, hogy elírás van a címben, vagy az oldal közben máshova költözött.</p>
+      </div>
+    </header>
+    <p><a href="/" style="color:var(--accent)">Vissza a főoldalra</a> · <a href="/AOG/" style="color:var(--accent)">AgOpenGPS letöltések</a></p>
+  </div>
+</body>
+</html>

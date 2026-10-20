@@ -102,8 +102,9 @@
         key: 'vt', nav: 'AgIsoVT', repo: 'Open-Agriculture/AgIsoVirtualTerminal',
         title: 'AgIsoVirtualTerminal',
         desc: 'ISOBUS virtuális terminál (VT) PC-re. · ISOBUS Virtual Terminal for the PC.',
-        main: { re: /^Windows\.Installer\.zip$/i, label: 'Windows telepítő · installer (zip)' },
-        extra: [{ re: /OSX/i, label: 'macOS' }, { re: /Ubuntu\.24/i, label: 'Ubuntu 24.04' }, { re: /Ubuntu\.22/i, label: 'Ubuntu 22.04' }]
+        // 1.6.0+ ships AgISOVirtualTerminal-<ver>-win64.exe etc.; older releases used Windows.Installer.zip / *.package.zip
+        main: { re: /(-win64\.exe|^Windows\.Installer\.zip)$/i, label: 'Windows telepítő · installer' },
+        extra: [{ re: /(\.dmg|OSX.*\.zip)$/i, label: 'macOS' }, { re: /ubuntu[.-]26/i, label: 'Ubuntu 26.04' }, { re: /ubuntu[.-]24/i, label: 'Ubuntu 24.04' }, { re: /ubuntu[.-]22/i, label: 'Ubuntu 22.04' }]
       }
     ];
 
