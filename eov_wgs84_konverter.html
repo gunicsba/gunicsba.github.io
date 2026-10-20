@@ -1,0 +1,1962 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EOV ⇄ WGS84 konverter</title>
+<meta name="description" content="KML, KMZ, Shapefile, GeoJSON és GeoTIFF átszámítása EOV és WGS84 között az EHT2 (GNSSnet.hu) hivatalos transzformációjával." />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/styles.css">
+<script src="https://cdn.jsdelivr.net/npm/proj4@2.9.2/dist/proj4.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/geotiff@2.1.3/dist-browser/geotiff.js"></script>
+<style>
+  .panel{background:var(--card);border:1px solid rgba(148,163,184,.18);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px 18px 16px;margin:16px 0}
+  .panel h2{margin:0 0 10px;font-size:19px}
+  .panel p{margin:0 0 10px}
+  .panel ul{margin:6px 0 10px;padding-left:20px}
+  .panel li{margin:3px 0}
+  a{color:var(--accent)}
+  code{font-size:.92em;background:rgba(148,163,184,.14);padding:1px 5px;border-radius:5px}
+  .muted{color:var(--muted)}
+  .small{font-size:13px}
+  .drop{border:2px dashed rgba(148,163,184,.45);border-radius:14px;padding:26px 16px;text-align:center;transition:border-color .15s,background .15s}
+  .drop.over{border-color:var(--accent);background:rgba(124,212,253,.07)}
+  .drop strong{font-size:17px}
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:10px;font:inherit;font-size:14px;font-weight:600;border:0;cursor:pointer;
+       background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;text-decoration:none}
+  .btn:hover{filter:brightness(1.08)}
+  .btn.secondary{background:transparent;color:var(--text);border:1px solid rgba(148,163,184,.4)}
+  .btn:disabled{opacity:.45;cursor:not-allowed;filter:none}
+  .btn:focus-visible,select:focus-visible,input:focus-visible{outline:none;box-shadow:var(--ring)}
+  select,input[type=number],input[type=text]{background:var(--bg);color:var(--text);border:1px solid rgba(148,163,184,.4);border-radius:8px;padding:6px 8px;font:inherit;font-size:14px;max-width:100%}
+  .opts{display:flex;flex-wrap:wrap;gap:10px 22px;align-items:center;margin-top:14px;font-size:14px}
+  .opts label{display:inline-flex;align-items:center;gap:6px}
+  .opt-title{font-weight:600}
+  .actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+  .job{border:1px solid rgba(148,163,184,.25);border-radius:12px;padding:12px 14px;margin-top:12px}
+  .job .head{display:flex;gap:10px;align-items:center}
+  .job .fname{font-weight:600;word-break:break-all;flex:1}
+  .job .x{background:none;border:0;color:var(--muted);font-size:20px;line-height:1;cursor:pointer;padding:0 4px}
+  .job .x:hover{color:var(--text)}
+  .badge{font-size:11px;padding:2px 8px;border-radius:999px;background:rgba(96,165,250,.15);border:1px solid rgba(96,165,250,.4);color:var(--accent);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap}
+  .job .info{margin-top:4px}
+  .row{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:10px;font-size:14px}
+  .row label{display:inline-flex;align-items:center;gap:6px}
+  .bar{height:6px;background:rgba(148,163,184,.2);border-radius:999px;overflow:hidden;margin-top:10px;display:none}
+  .bar.on{display:block}
+  .bar>div{height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent-2));transition:width .2s}
+  .status{font-size:13px;color:var(--muted)}
+  .status.err,.err{color:#ef4444}
+  .status.ok{color:#22c55e}
+  .warn{color:#f59e0b}
+  .stats{font-size:13px;margin-top:8px;color:var(--muted)}
+  .stats b{color:var(--text);font-weight:600}
+  .note{border-left:3px solid var(--accent);padding:8px 12px;background:rgba(124,212,253,.06);border-radius:6px;font-size:14px;margin-top:10px}
+  .pt{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .pt input{flex:1 1 260px}
+  pre.ptout{white-space:pre-wrap;font-size:13.5px;line-height:1.55;margin:12px 0 0;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+  details summary{cursor:pointer;font-weight:600}
+  #empty{margin-top:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo" aria-hidden="true">EOV</div>
+    <div>
+      <h1 class="title">EOV ⇄ WGS84 konverter</h1>
+      <p class="subtitle">KML, KMZ, Shapefile, GeoJSON és GeoTIFF átszámítása az EHT2 hivatalos transzformációjával.</p>
+    </div>
+  </header>
+
+  <section class="panel">
+    <p>A DJI Terra, a QGIS, a Google Earth és a legtöbb program egy országosan egységes datumeltolással (<code>towgs84</code>) számol EOV és WGS84 között. Ez helytől függően átlagosan <strong>kb. 35 cm</strong>, helyenként <strong>1 m</strong> hibát ad. Ez az oldal minden pontot a GNSSnet.hu <a href="https://eht2.gnssnet.hu/" target="_blank" rel="noopener">EHT2</a> szolgáltatásával számol át, ami a hivatalos javítórácsot is használja – ugyanúgy, mint a <a href="/kml_shape.html">KML → Shape</a> és a <a href="/shape_kml.html">Shape → KML</a> konvertereink, csak általánosan, bármilyen fájlra.</p>
+    <ul>
+      <li><b>KML / KMZ</b> (WGS84) → EOV Shapefile vagy GeoJSON – minden geometria és attribútum megmarad.</li>
+      <li><b>Shapefile / GeoJSON</b> (EOV, pl. geoshop.hu, földmérő) → WGS84 KML, GeoJSON vagy Shapefile – és fordítva is.</li>
+      <li>Shapefile → Shapefile: csak a koordinátákat írja át, az attribútumtábla (DBF) bájtra azonos marad.</li>
+      <li><b>GeoTIFF</b> (ortofotó, NDVI, DSM) EOV-ba vagy WGS84-be (földrajzi vagy UTM). DSM-nél a magasságok is átszámíthatók ellipszoidi ⇄ Balti (EOMA) között.</li>
+    </ul>
+  </section>
+
+  <section class="panel">
+    <h2>Fájlok</h2>
+    <div id="drop" class="drop">
+      <strong>Húzd ide a fájlokat</strong>
+      <div style="margin:10px 0">
+        <label class="btn">Fájlok kiválasztása<input type="file" id="fileInput" multiple hidden
+          accept=".kml,.kmz,.zip,.shp,.shx,.dbf,.prj,.cpg,.geojson,.json,.tif,.tiff"></label>
+      </div>
+      <div class="small muted">KML, KMZ, Shapefile (ZIP-ben, vagy a .shp + .shx + .dbf + .prj fájlokat egyszerre kijelölve), GeoJSON, GeoTIFF</div>
+    </div>
+
+    <div class="opts">
+      <label title="Z koordináták és DSM raszterek magasságértékei: ellipszoidi (GNSS) ⇄ Balti / EOMA"><input type="checkbox" id="optZ"> Magasságok átszámítása (ellipszoidi ⇄ Balti)</label>
+      <label>DBF kódolás új shapefile-nál
+        <select id="optEnc"><option value="utf-8">UTF-8</option><option value="windows-1250">Windows-1250</option></select></label>
+    </div>
+    <div class="opts">
+      <span class="opt-title">GeoTIFF:</span>
+      <label>Mód
+        <select id="optRMode">
+          <option value="warp">Átmintavételezés (észak felé tájolt)</option>
+          <option value="georef">Csak georeferencia átírása (gyors, forgatott)</option>
+        </select></label>
+      <label>Mintavételezés
+        <select id="optResample"><option value="bilinear">Bilineáris</option><option value="nearest">Legközelebbi szomszéd</option></select></label>
+      <label>Pixelméret <input type="number" id="optPix" min="0" step="any" placeholder="auto" style="width:6.5em"> m</label>
+    </div>
+
+    <div id="jobs"></div>
+    <p id="empty" class="small muted">Még nincs betöltött fájl.</p>
+    <div class="actions">
+      <button class="btn" id="runAll" disabled>Összes konvertálása</button>
+      <button class="btn secondary" id="dlAll" disabled>Összes letöltése (ZIP)</button>
+      <button class="btn secondary" id="clearAll" disabled>Lista törlése</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Egy pont ellenőrzése</h2>
+    <p class="small muted">Írj be egy pontot – WGS84 (<code>47.4979 19.0402</code>) vagy EOV (<code>650683 239377</code>, Y X sorrendben) –, és megmutatjuk az EHT2 eredményét, valamint azt, hogy az egyszerű átszámítás mennyit tévedne.</p>
+    <div class="pt">
+      <input type="text" id="ptIn" placeholder="pl. 47.4979, 19.0402  vagy  650683.12 239377.45" />
+      <button class="btn" id="ptBtn">Számolj</button>
+    </div>
+    <pre class="ptout" id="ptOut"></pre>
+  </section>
+
+  <section class="panel">
+    <details>
+      <summary>Tudnivalók</summary>
+      <ul class="small">
+        <li>A fájlok a böngésződben dolgozódnak fel. Csak a pontok koordinátái mennek el az EHT2 szerverre (eht2.gnssnet.hu).</li>
+        <li>Az EHT2 ETRS89-ben számol. A magyar RTK hálózattal (GNSSnet.hu, vagy ETRF-ben bemért bázisról) mért „WGS84” koordináta gyakorlatilag ETRS89, így ez a helyes választás. Ha a felmérés tisztán ITRF / WGS84 keretben készült (pl. RTK nélküli drón, PPP), az ETRS89-től ma kb. 0,9 m-rel tér el – erről az <a href="/nrcan_etrf.html">ETRF oldalon</a> olvashatsz.</li>
+        <li>Az EHT2 csak Magyarország területén (és a határ menti néhány km-en) számol. A lefedettség szélén a szolgáltatás hibaüzenet nélkül is adhat több méterrel hibás eredményt. A program ezt kiszűri: ha egy pont az egyszerű átszámítástól 1,5 m-nél jobban eltérne, lefedettségen kívülinek tekinti. (Az országon belül ez az eltérés legfeljebb ~1 m.) A kívül eső pontok helyét a legközelebbi érvényes pont javításával közelíti, és ezt figyelmeztetésben jelzi.</li>
+        <li>EOV-ban a Y a keleti, az X az északi koordináta. A fájlokban (SHP, GeoJSON, GeoTIFF) a szokásos sorrend: először Y, aztán X.</li>
+        <li><b>GeoTIFF – átmintavételezés:</b> észak felé tájolt, Deflate tömörítésű, csempézett GeoTIFF készül, a forrással azonos pixelmérettel (ha nem adsz meg mást). A program kb. 50 méterenként rácspontokat számol az EHT2-vel, és a köztes pixelek helyét ezekből interpolálja (a hiba mm alatti). Az 1 GB körüli ortofotók feldolgozása a gép erejétől függően 1–3 perc.</li>
+        <li><b>GeoTIFF – csak georeferencia:</b> a pixelek érintetlenek maradnak, csak a fájl végére kerül egy új fejléc (affin transzformáció forgatással). Ez másodpercek alatt kész, de a kép forgatott lesz: a QGIS, a GDAL, az ArcGIS és a Global Mapper kezeli, de nem minden program. Az illesztés maradék hibáját a program kiírja – néhány száz méteres ortofotónál ez jellemzően mm alatti.</li>
+        <li>JPEG tömörítésű forrásból a kimenet veszteségmentes (Deflate) lesz, ezért nagyobb fájl keletkezhet.</li>
+      </ul>
+    </details>
+  </section>
+
+  <footer class="foot">
+    <div class="links">Készítette: <a href="https://github.com/gunicsba" target="_blank" rel="noopener">gunicsba</a> • <a href="/">Főoldal</a></div>
+    <div class="links"><a href="https://github.com/gunicsba/gunicsba.github.io/issues" target="_blank" rel="noopener">Hibát találtál? Jelezd itt</a></div>
+  </footer>
+</div>
+
+<script>
+'use strict';
+/* =====================================================================
+ *  EOV ⇄ WGS84 konverter – EHT2 (eht2.gnssnet.hu) alapú átszámítás
+ *  KML / KMZ / Shapefile / GeoJSON / GeoTIFF
+ * ===================================================================== */
+
+/* ---------- apró segédek ---------- */
+const $ = (s, el = document) => el.querySelector(s);
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  if (attrs) for (const [k, v] of Object.entries(attrs)) {
+    if (v === null || v === undefined || v === false) continue;
+    if (k === 'class') el.className = v;
+    else if (k === 'text') el.textContent = v;
+    else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+    else el.setAttribute(k, v === true ? '' : v);
+  }
+  for (const c of kids.flat()) if (c !== null && c !== undefined && c !== false) el.append(c.nodeType ? c : String(c));
+  return el;
+}
+const escXml = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const extOf = n => { const m = /\.([^.\/\\]+)$/.exec(n); return m ? m[1].toLowerCase() : ''; };
+const baseOf = n => n.replace(/^.*[\/\\]/, '').replace(/\.[^.]+$/, '');
+const fmtInt = n => Math.round(n).toLocaleString('hu-HU');
+const fmtDec = (n, d) => n.toFixed(d).replace('.', ',');
+const fmtBytes = n => n < 1024 ? n + ' B' : n < 1048576 ? fmtDec(n / 1024, 1) + ' kB' : n < 1073741824 ? fmtDec(n / 1048576, 1) + ' MB' : fmtDec(n / 1073741824, 2) + ' GB';
+const fmtLen = m => m < 0.001 ? '< 1 mm' : m < 0.01 ? fmtDec(m * 1000, 1) + ' mm' : m < 1 ? fmtDec(m * 100, 1) + ' cm' : fmtDec(m, 2) + ' m';
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const abortErr = () => Object.assign(new Error('Megszakítva'), { name: 'AbortError' });
+const textOf = el => el ? el.textContent : '';
+function downloadBlob(blob, name) {
+  const a = h('a', { href: URL.createObjectURL(blob), download: name, style: 'display:none' });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 120000);
+}
+
+/* =====================================================================
+ *  Koordináta-rendszerek
+ * ===================================================================== */
+const PRJ_WGS84 = 'GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]]';
+const PRJ_ETRS89 = 'GEOGCS["GCS_ETRS_1989",DATUM["D_ETRS_1989",SPHEROID["GRS_1980",6378137.0,298.257222101]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]]';
+// ugyanaz a .prj, mint a geoshop.hu-s állományokban
+const PRJ_EOV = 'PROJCS["HD72_EOV",GEOGCS["GCS_HD72",DATUM["D_Hungarian_1972",SPHEROID["GRS_1967",6378160,298.247167427]],PRIMEM["Greenwich",0],UNIT["Degree",0.017453292519943295]],PROJECTION["Hotine_Oblique_Mercator_Azimuth_Center"],PARAMETER["latitude_of_center",47.14439372222222],PARAMETER["longitude_of_center",19.04857177777778],PARAMETER["azimuth",90],PARAMETER["scale_factor",0.99993],PARAMETER["false_easting",650000],PARAMETER["false_northing",200000],UNIT["Meter",1]]';
+const prjUtm = (z, etrs) => `PROJCS["${etrs ? 'ETRS_1989' : 'WGS_1984'}_UTM_Zone_${z}N",${etrs ? PRJ_ETRS89 : PRJ_WGS84},PROJECTION["Transverse_Mercator"],PARAMETER["False_Easting",500000.0],PARAMETER["False_Northing",0.0],PARAMETER["Central_Meridian",${z * 6 - 183}.0],PARAMETER["Scale_Factor",0.9996],PARAMETER["Latitude_Of_Origin",0.0],UNIT["Meter",1.0]]`;
+
+const CRS = {};
+function defCrs(key, o) { CRS[key] = Object.assign({ key, code: +key.split(':')[1] }, o); proj4.defs(key, o.proj); }
+defCrs('EPSG:23700', { kind: 'eov', label: 'EOV (HD72, EPSG:23700)', tag: 'EOV', citation: 'HD72 / EOV', prj: PRJ_EOV,
+  proj: '+proj=somerc +lat_0=47.14439372222222 +lon_0=19.04857177777778 +k_0=0.99993 +x_0=650000 +y_0=200000 +ellps=GRS67 +towgs84=52.17,-71.82,-14.9,0,0,0,0 +units=m +no_defs' });
+defCrs('EPSG:4326', { kind: 'geo', label: 'WGS84 földrajzi (EPSG:4326)', tag: 'WGS84', citation: 'WGS 84', prj: PRJ_WGS84, proj: '+proj=longlat +datum=WGS84 +no_defs' });
+defCrs('EPSG:4258', { kind: 'geo', label: 'ETRS89 földrajzi (EPSG:4258)', tag: 'ETRS89', citation: 'ETRS89', prj: PRJ_ETRS89, proj: '+proj=longlat +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +no_defs' });
+for (const z of [34, 33, 35]) {
+  defCrs('EPSG:326' + z, { kind: 'proj', label: `WGS84 / UTM ${z}N (EPSG:326${z})`, tag: `WGS84_UTM${z}N`, citation: `WGS 84 / UTM zone ${z}N`, prj: prjUtm(z, false), proj: `+proj=utm +zone=${z} +datum=WGS84 +units=m +no_defs` });
+}
+for (const z of [34, 33, 35]) {
+  defCrs('EPSG:258' + z, { kind: 'proj', label: `ETRS89 / UTM ${z}N (EPSG:258${z})`, tag: `ETRS89_UTM${z}N`, citation: `ETRS89 / UTM zone ${z}N`, prj: prjUtm(z, true), proj: `+proj=utm +zone=${z} +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs` });
+}
+defCrs('EPSG:3857', { kind: 'proj', label: 'Web Mercator (EPSG:3857)', tag: 'WEBMERC', citation: 'WGS 84 / Pseudo-Mercator', sourceOnly: true,
+  prj: 'PROJCS["WGS_1984_Web_Mercator_Auxiliary_Sphere",' + PRJ_WGS84 + ',PROJECTION["Mercator_Auxiliary_Sphere"],PARAMETER["False_Easting",0.0],PARAMETER["False_Northing",0.0],PARAMETER["Central_Meridian",0.0],PARAMETER["Standard_Parallel_1",0.0],PARAMETER["Auxiliary_Sphere_Type",0.0],UNIT["Meter",1.0]]',
+  proj: '+proj=merc +a=6378137 +b=6378137 +lat_ts=0 +lon_0=0 +x_0=0 +y_0=0 +k=1 +units=m +nadgrids=@null +wktext +no_defs' });
+const DST_FOR_EOV = ['EPSG:4326', 'EPSG:32634', 'EPSG:32633', 'EPSG:32635', 'EPSG:4258', 'EPSG:25834', 'EPSG:25833', 'EPSG:25835'];
+
+function crsFromWkt(wkt) {
+  const s = String(wkt || '').toUpperCase();
+  if (!s.trim()) return null;
+  if (/EOV|HD72|HUNGARIAN[_ ]1972|23700|EGYSEGES/.test(s)) return 'EPSG:23700';
+  const u = /UTM[_ ]ZONE[_ ]?(\d{1,2})\s*N/.exec(s);
+  if (u && [33, 34, 35].includes(+u[1])) return (/ETRS|ETRF/.test(s) ? 'EPSG:258' : 'EPSG:326') + u[1];
+  if (/WEB_MERCATOR|PSEUDO[-_ ]MERCATOR|3857|MERCATOR_AUXILIARY/.test(s)) return 'EPSG:3857';
+  if (!/PROJCS|PROJCRS|PROJECTION/.test(s)) {
+    if (/ETRS|ETRF|4258/.test(s)) return 'EPSG:4258';
+    if (/WGS[_ ]?(19)?84|4326/.test(s)) return 'EPSG:4326';
+  }
+  return null;
+}
+function crsFromBBox(b) {
+  if (!b || !Number.isFinite(b[0])) return null;
+  const [x0, y0, x1, y1] = b;
+  if (x0 >= 13 && x1 <= 26 && y0 >= 44 && y1 <= 50) return 'EPSG:4326';
+  if (x0 >= 350000 && x1 <= 1000000 && y0 >= 0 && y1 <= 420000) return 'EPSG:23700';
+  if (y0 >= 4950000 && y1 <= 5450000 && x0 >= 50000 && x1 <= 950000) return 'EPSG:32634';
+  return null;
+}
+function crsFromGeoKeys(gk) {
+  if (!gk) return null;
+  const p = gk.ProjectedCSTypeGeoKey, g = gk.GeographicTypeGeoKey;
+  if (p && p !== 32767) return CRS['EPSG:' + p] ? 'EPSG:' + p : null;
+  for (const k of ['ProjCenterLatGeoKey', 'ProjNatOriginLatGeoKey', 'ProjFalseOriginLatGeoKey'])
+    if (Math.abs((gk[k] || 0) - 47.14439372222222) < 1e-6) return 'EPSG:23700';
+  const cit = [gk.GTCitationGeoKey, gk.PCSCitationGeoKey, gk.GeogCitationGeoKey].filter(Boolean).join(' ');
+  if (gk.GTModelTypeGeoKey === 2) {
+    if (g === 4326 || g === 4258) return 'EPSG:' + g;
+    return crsFromWkt(cit) || (g === 4258 ? 'EPSG:4258' : null);
+  }
+  return crsFromWkt(cit);
+}
+
+/* =====================================================================
+ *  EHT2 kliens – max. 100 kB / kérés (≈1100 pont), párhuzamos kérések
+ * ===================================================================== */
+const EHT = {
+  base: 'https://eht2.gnssnet.hu/api/transformation/',
+  concurrency: 4,
+  maxBody: 92000,
+  /**
+   * dir = 'etrs89-to-eov':  p1 = lat, p2 = lon      → o1 = EOV Y (kelet), o2 = EOV X (észak)
+   * dir = 'eov-to-etrs89':  p1 = Y (kelet), p2 = X  → o1 = lat, o2 = lon
+   * h = magasság (ellipszoidi / Balti), a válaszban a másik rendszerbeli magasság.
+   */
+  async run(dir, p1, p2, hh, { onProgress, signal } = {}) {
+    const toEov = dir === 'etrs89-to-eov';
+    const n = p1.length, dec = toEov ? 11 : 4, kd = toEov ? 10 : 4;
+    const idx = new Int32Array(n), first = [], seen = new Map();
+    for (let i = 0; i < n; i++) {
+      if (!Number.isFinite(p1[i]) || !Number.isFinite(p2[i])) { idx[i] = -1; continue; }
+      const key = p1[i].toFixed(kd) + ' ' + p2[i].toFixed(kd) + ' ' + hh[i].toFixed(3);
+      let u = seen.get(key);
+      if (u === undefined) { u = first.length; seen.set(key, u); first.push(i); }
+      idx[i] = u;
+    }
+    const m = first.length, chunks = [];
+    let cur = [], len = 2;
+    for (let u = 0; u < m; u++) {
+      const i = first[u];
+      const s = toEov
+        ? `{"pointNumber":"${u}","lat":${p1[i].toFixed(dec)},"lon":${p2[i].toFixed(dec)},"h":${hh[i].toFixed(4)}}`
+        : `{"pointNumber":"${u}","y":${p1[i].toFixed(dec)},"x":${p2[i].toFixed(dec)},"h":${hh[i].toFixed(4)}}`;
+      if (cur.length && len + s.length + 1 > this.maxBody) { chunks.push(cur); cur = []; len = 2; }
+      cur.push(s); len += s.length + 1;
+    }
+    if (cur.length) chunks.push(cur);
+    const o1 = new Float64Array(m).fill(NaN), o2 = new Float64Array(m).fill(NaN), oh = new Float64Array(m).fill(NaN);
+    let next = 0, done = 0, failed = false, lastErr = null;
+    const worker = async () => {
+      while (next < chunks.length && !failed) {
+        const c = chunks[next++];
+        let res;
+        try { res = await this.post(dir, '[' + c.join(',') + ']', signal); }
+        catch (e) { failed = true; throw e; }
+        if (!Array.isArray(res)) { failed = true; throw new Error('EHT2: váratlan válasz'); }
+        for (const r of res) {
+          const u = parseInt(r.pointNumber, 10);
+          if (!(u >= 0 && u < m)) continue;
+          if (r.error === 0 || r.error === '0') {
+            o1[u] = parseFloat(toEov ? r.y : r.lat);
+            o2[u] = parseFloat(toEov ? r.x : r.lon);
+            oh[u] = parseFloat(r.h);
+          } else lastErr = String(r.error);
+        }
+        done += c.length;
+        if (onProgress) onProgress(done, m);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(this.concurrency, chunks.length) }, worker));
+    const r1 = new Float64Array(n), r2 = new Float64Array(n), rh = new Float64Array(n);
+    let bad = 0;
+    for (let i = 0; i < n; i++) {
+      const u = idx[i];
+      if (u < 0) { r1[i] = r2[i] = rh[i] = NaN; bad++; continue; }
+      r1[i] = o1[u]; r2[i] = o2[u]; rh[i] = oh[u];
+      if (Number.isNaN(o1[u])) bad++;
+    }
+    return { o1: r1, o2: r2, h: rh, bad, unique: m, requests: chunks.length, lastErr };
+  },
+  async post(dir, body, signal) {
+    for (let attempt = 0; ; attempt++) {
+      if (signal && signal.aborted) throw abortErr();
+      try {
+        const r = await fetch(this.base + dir, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal });
+        if (r.ok) return await r.json();
+        const err = new Error('EHT2 szerver hiba: HTTP ' + r.status);
+        if (r.status === 413 || r.status === 400) err.fatal = true;
+        throw err;
+      } catch (e) {
+        if ((signal && signal.aborted) || e.fatal || attempt >= 3) throw e.name === 'TypeError' ? new Error('Nem érhető el az EHT2 szerver (' + e.message + ')') : e;
+        await sleep(1000 * 2 ** attempt);
+      }
+    }
+  },
+};
+
+/**
+ * Általános átszámítás. xy: Float64Array [x0,y0,x1,y1,…] a forrás KR-ben (x = kelet / lon, y = észak / lat).
+ * Az egyik oldal mindig EOV, a másik WGS84/ETRS89 (földrajzi vagy vetületi).
+ */
+async function transformXY(srcKey, dstKey, xy, z, opt = {}) {
+  const src = CRS[srcKey], dst = CRS[dstKey];
+  if (!src || !dst) throw new Error('Ismeretlen koordináta-rendszer');
+  if ((src.kind === 'eov') === (dst.kind === 'eov')) throw new Error('Csak EOV ⇄ WGS84/ETRS89 átszámítás támogatott');
+  const n = xy.length / 2, hh = new Float64Array(n), out = new Float64Array(2 * n);
+  const useZ = !!(opt.convertZ && z);
+  if (useZ) for (let i = 0; i < n; i++) hh[i] = Number.isFinite(z[i]) ? z[i] : 0;
+  let r;
+  if (src.kind === 'eov') {
+    const E = new Float64Array(n), N = new Float64Array(n);
+    for (let i = 0; i < n; i++) { E[i] = xy[2 * i]; N[i] = xy[2 * i + 1]; }
+    r = await EHT.run('eov-to-etrs89', E, N, hh, opt);
+    const conv = dst.kind === 'geo' ? null : proj4('EPSG:4326', dstKey);
+    for (let i = 0; i < n; i++) {
+      const lat = r.o1[i], lon = r.o2[i];
+      if (conv && Number.isFinite(lat)) { const p = conv.forward([lon, lat]); out[2 * i] = p[0]; out[2 * i + 1] = p[1]; }
+      else { out[2 * i] = lon; out[2 * i + 1] = lat; }
+    }
+  } else {
+    const lat = new Float64Array(n), lon = new Float64Array(n);
+    const conv = src.kind === 'geo' ? null : proj4(srcKey, 'EPSG:4326');
+    for (let i = 0; i < n; i++) {
+      let x = xy[2 * i], y = xy[2 * i + 1];
+      if (conv && Number.isFinite(x) && Number.isFinite(y)) { const p = conv.forward([x, y]); x = p[0]; y = p[1]; }
+      lon[i] = x; lat[i] = y;
+    }
+    r = await EHT.run('etrs89-to-eov', lat, lon, hh, opt);
+    for (let i = 0; i < n; i++) { out[2 * i] = r.o1[i]; out[2 * i + 1] = r.o2[i]; }
+  }
+  // Összevetés az egyszerű (towgs84) átszámítással. Magyarországon belül az eltérés legfeljebb ~1 m;
+  // a lefedettség szélén az EHT2 hibakód nélkül is adhat több méterrel/tíz méterrel hibás eredményt – ezeket kiszűrjük.
+  const conv = proj4(srcKey, dstKey), geo = dst.kind === 'geo';
+  let suspect = 0, sum = 0, max = 0, cnt = 0;
+  for (let i = 0; i < n; i++) {
+    const X = out[2 * i], Y = out[2 * i + 1];
+    if (!Number.isFinite(X) || !Number.isFinite(Y)) continue;
+    let p;
+    try { p = conv.forward([xy[2 * i], xy[2 * i + 1]]); } catch (e) { continue; }
+    let dx = p[0] - X, dy = p[1] - Y;
+    if (geo) { dx *= 111320 * Math.cos(Y * Math.PI / 180); dy *= 110574; }
+    const d = Math.hypot(dx, dy);
+    if (!(d <= EHT_SANITY_M)) { out[2 * i] = out[2 * i + 1] = NaN; r.h[i] = NaN; suspect++; continue; }
+    sum += d; cnt++; if (d > max) max = d;
+  }
+  let outZ = z ? Float64Array.from(z) : null;
+  if (useZ) for (let i = 0; i < n; i++) if (Number.isFinite(r.h[i])) outZ[i] = r.h[i];
+  return { xy: out, z: outZ, h: r.h, bad: r.bad + suspect, unique: r.unique, requests: r.requests,
+           lastErr: r.lastErr || (suspect ? 'a lefedettség szélén megbízhatatlan eredmény' : null),
+           diff: cnt ? { mean: sum / cnt, max, n: cnt } : null };
+}
+const EHT_SANITY_M = 1.5;
+
+function badPointsError(r, n) {
+  return new Error(`${fmtInt(r.bad)} / ${fmtInt(n)} pontot az EHT2 nem tudott átszámítani` +
+    (r.lastErr ? ` („${r.lastErr}”)` : '') + '. Valószínűleg rossz a forrás koordináta-rendszer, vagy a pontok Magyarországon kívül esnek.');
+}
+/**
+ * Az EHT2 lefedettségén kívüli pontok pótlása: egyszerű (proj4) átszámítás + a legközelebbi érvényes pont javítása
+ * (EHT2 − egyszerű). inZ/outZ megadásakor a magasságot is a legközelebbi pont eltolásával közelíti.
+ */
+function fillOutsideCoverage(fromKey, toKey, inXY, outXY, inZ, outZ) {
+  const n = inXY.length / 2, conv = proj4(fromKey, toKey), valid = [], bad = [];
+  for (let i = 0; i < n; i++) (Number.isFinite(outXY[2 * i]) && Number.isFinite(outXY[2 * i + 1]) ? valid : bad).push(i);
+  if (valid.length < 3) return false;
+  const step = Math.max(1, Math.floor(valid.length / 2000)), ref = [];
+  for (let k = 0; k < valid.length; k += step) {
+    const i = valid[k], p = conv.forward([inXY[2 * i], inXY[2 * i + 1]]);
+    ref.push([inXY[2 * i], inXY[2 * i + 1], outXY[2 * i] - p[0], outXY[2 * i + 1] - p[1], inZ && outZ ? outZ[i] - inZ[i] : 0]);
+  }
+  for (const i of bad) {
+    const x = inXY[2 * i], y = inXY[2 * i + 1];
+    let best = ref[0], bd = Infinity;
+    for (const r of ref) { const d = (r[0] - x) ** 2 + (r[1] - y) ** 2; if (d < bd) { bd = d; best = r; } }
+    const p = conv.forward([x, y]);
+    outXY[2 * i] = p[0] + best[2]; outXY[2 * i + 1] = p[1] + best[3];
+    if (inZ && outZ) outZ[i] = inZ[i] + best[4];
+  }
+  return true;
+}
+/** Vektoroknál: kevés (≤ 20%) lefedettségen kívüli pont közelíthető, sok esetén hiba (valószínűleg rossz a forrás KR). */
+function handleOutside(r, srcKey, dstKey, xy, z, n, opt) {
+  if (!r.bad) return;
+  if (r.bad > 0.2 * n || !fillOutsideCoverage(srcKey, dstKey, xy, r.xy, opt.convertZ ? z : null, opt.convertZ ? r.z : null)) throw badPointsError(r, n);
+  r.approx = r.bad;
+}
+
+/* =====================================================================
+ *  GeoJSON-szerű feature-ök kezelése (közös belső formátum)
+ * ===================================================================== */
+function eachPosition(geom, fn) {
+  if (!geom) return;
+  if (geom.type === 'GeometryCollection') { (geom.geometries || []).forEach(g => eachPosition(g, fn)); return; }
+  const walk = c => { if (!Array.isArray(c)) return; if (typeof c[0] === 'number') fn(c); else c.forEach(walk); };
+  walk(geom.coordinates);
+}
+function featuresBBox(features) {
+  const b = [Infinity, Infinity, -Infinity, -Infinity];
+  for (const f of features) eachPosition(f.geometry, p => {
+    if (p[0] < b[0]) b[0] = p[0]; if (p[1] < b[1]) b[1] = p[1];
+    if (p[0] > b[2]) b[2] = p[0]; if (p[1] > b[3]) b[3] = p[1];
+  });
+  return b;
+}
+function countPositions(features) { let n = 0; for (const f of features) eachPosition(f.geometry, () => n++); return n; }
+
+async function transformFeatures(features, srcKey, dstKey, opt) {
+  const pos = [];
+  for (const f of features) eachPosition(f.geometry, p => pos.push(p));
+  const n = pos.length;
+  if (!n) throw new Error('Nincs átszámítható koordináta');
+  const xy = new Float64Array(2 * n), z = new Float64Array(n);
+  let hasZ = false;
+  pos.forEach((p, i) => { xy[2 * i] = p[0]; xy[2 * i + 1] = p[1]; if (p.length > 2 && Number.isFinite(p[2])) { z[i] = p[2]; hasZ = true; } });
+  const r = await transformXY(srcKey, dstKey, xy, hasZ ? z : null, opt);
+  handleOutside(r, srcKey, dstKey, xy, hasZ ? z : null, n, opt);
+  pos.forEach((p, i) => { p[0] = r.xy[2 * i]; p[1] = r.xy[2 * i + 1]; if (hasZ && p.length > 2) p[2] = r.z[i]; });
+  r.points = n;
+  return r;
+}
+function roundFeatures(features, dstKey) {
+  const f = CRS[dstKey].kind === 'geo' ? 1e9 : 1e3;
+  for (const ft of features) eachPosition(ft.geometry, p => {
+    p[0] = Math.round(p[0] * f) / f; p[1] = Math.round(p[1] * f) / f;
+    if (p.length > 2) p[2] = Math.round(p[2] * 1e3) / 1e3;
+  });
+}
+function closeRing(r) {
+  if (r.length && (r[0][0] !== r[r.length - 1][0] || r[0][1] !== r[r.length - 1][1])) r.push(r[0].slice());
+  return r;
+}
+function ringArea(r) { // előjeles terület; pozitív = óramutatóval ellentétes
+  if (r.length < 3) return 0;
+  const x0 = r[0][0], y0 = r[0][1];
+  let s = 0;
+  for (let i = 0; i < r.length - 1; i++) s += (r[i][0] - x0) * (r[i + 1][1] - y0) - (r[i + 1][0] - x0) * (r[i][1] - y0);
+  return s / 2;
+}
+function pointInRing(pt, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
+    if ((yi > pt[1]) !== (yj > pt[1]) && pt[0] < (xj - xi) * (pt[1] - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+/** Shapefile gyűrűk → (Multi)Polygon. Shapefile-ban a külső gyűrű óramutató szerinti. */
+function ringsToPolygons(rings) {
+  const outers = [], holes = [];
+  for (const r of rings) { if (r.length < 4) continue; (ringArea(r) < 0 ? outers : holes).push(r); }
+  if (!outers.length) outers.push(...holes.splice(0));
+  const polys = outers.map(o => [o]);
+  for (const hRing of holes) {
+    let best = -1, bestA = Infinity;
+    outers.forEach((o, i) => { const a = Math.abs(ringArea(o)); if (a < bestA && pointInRing(hRing[0], o)) { best = i; bestA = a; } });
+    if (best < 0) polys.push([hRing]); else polys[best].push(hRing);
+  }
+  for (const p of polys) {
+    if (ringArea(p[0]) < 0) p[0].reverse();
+    for (let i = 1; i < p.length; i++) if (ringArea(p[i]) > 0) p[i].reverse();
+  }
+  if (!polys.length) return null;
+  return polys.length === 1 ? { type: 'Polygon', coordinates: polys[0] } : { type: 'MultiPolygon', coordinates: polys };
+}
+
+/* =====================================================================
+ *  KML olvasás / írás
+ * ===================================================================== */
+const KML_GEOMS = new Set(['Point', 'LineString', 'LinearRing', 'Polygon', 'MultiGeometry', 'Track', 'MultiTrack']);
+const kmlChild = (el, name) => { for (const c of el.children) if (c.localName === name) return c; return null; };
+const kmlChildren = (el, name) => Array.from(el.children).filter(c => c.localName === name);
+function parseCoordText(t) {
+  const s = String(t || '').trim().replace(/\s*,\s*/g, ',');
+  if (!s) return [];
+  const out = [];
+  for (const tok of s.split(/\s+/)) {
+    const a = tok.split(',').map(Number);
+    if (a.length >= 2 && Number.isFinite(a[0]) && Number.isFinite(a[1])) out.push(a.length >= 3 && Number.isFinite(a[2]) ? [a[0], a[1], a[2]] : [a[0], a[1]]);
+  }
+  return out;
+}
+function kmlGeom(el) {
+  switch (el.localName) {
+    case 'Point': { const c = parseCoordText(textOf(kmlChild(el, 'coordinates'))); return c.length ? { type: 'Point', coordinates: c[0] } : null; }
+    case 'LineString': { const c = parseCoordText(textOf(kmlChild(el, 'coordinates'))); return c.length >= 2 ? { type: 'LineString', coordinates: c } : null; }
+    case 'LinearRing': { const c = closeRing(parseCoordText(textOf(kmlChild(el, 'coordinates')))); return c.length >= 4 ? { type: 'Polygon', coordinates: [c] } : null; }
+    case 'Polygon': {
+      const ring = lr => closeRing(parseCoordText(textOf(kmlChild(lr, 'coordinates'))));
+      const ob = kmlChild(el, 'outerBoundaryIs'), olr = ob && kmlChild(ob, 'LinearRing');
+      const outer = olr ? ring(olr) : [];
+      if (outer.length < 4) return null;
+      const rings = [outer];
+      for (const ib of kmlChildren(el, 'innerBoundaryIs')) for (const lr of kmlChildren(ib, 'LinearRing')) { const r = ring(lr); if (r.length >= 4) rings.push(r); }
+      return { type: 'Polygon', coordinates: rings };
+    }
+    case 'MultiGeometry': {
+      const gs = [];
+      for (const c of el.children) {
+        if (!KML_GEOMS.has(c.localName)) continue;
+        const g = kmlGeom(c);
+        if (!g) continue;
+        if (g.type === 'GeometryCollection') gs.push(...g.geometries); else gs.push(g);
+      }
+      if (!gs.length) return null;
+      if (gs.length === 1) return gs[0];
+      const t = new Set(gs.map(g => g.type));
+      if (t.size === 1) {
+        const k = gs[0].type;
+        if (k === 'Point') return { type: 'MultiPoint', coordinates: gs.map(g => g.coordinates) };
+        if (k === 'LineString') return { type: 'MultiLineString', coordinates: gs.map(g => g.coordinates) };
+        if (k === 'Polygon') return { type: 'MultiPolygon', coordinates: gs.map(g => g.coordinates) };
+      }
+      return { type: 'GeometryCollection', geometries: gs };
+    }
+    case 'Track': {
+      const c = kmlChildren(el, 'coord').map(e => e.textContent.trim().split(/\s+/).map(Number)).filter(a => a.length >= 2 && Number.isFinite(a[0]) && Number.isFinite(a[1]));
+      return c.length >= 2 ? { type: 'LineString', coordinates: c } : null;
+    }
+    case 'MultiTrack': {
+      const ls = kmlChildren(el, 'Track').map(kmlGeom).filter(Boolean).map(g => g.coordinates);
+      return ls.length ? (ls.length === 1 ? { type: 'LineString', coordinates: ls[0] } : { type: 'MultiLineString', coordinates: ls }) : null;
+    }
+  }
+  return null;
+}
+function parseXml(text, what) {
+  const doc = new DOMParser().parseFromString(text, 'application/xml');
+  if (doc.getElementsByTagName('parsererror').length) throw new Error(`Hibás ${what} (XML) fájl`);
+  return doc;
+}
+function readKml(text, layerName) {
+  const doc = parseXml(text, 'KML');
+  const features = [];
+  for (const pm of doc.getElementsByTagNameNS('*', 'Placemark')) {
+    let geom = null;
+    for (const c of pm.children) if (KML_GEOMS.has(c.localName)) { geom = kmlGeom(c); break; }
+    if (!geom) continue;
+    const props = {};
+    const nm = textOf(kmlChild(pm, 'name')).trim(); if (nm) props.name = nm;
+    const ds = textOf(kmlChild(pm, 'description')).trim(); if (ds) props.description = ds;
+    const path = [];
+    for (let e = pm.parentElement; e; e = e.parentElement) if (e.localName === 'Folder') { const n = textOf(kmlChild(e, 'name')).trim(); if (n) path.unshift(n); }
+    if (path.length) props.folder = path.join(' / ');
+    const ed = kmlChild(pm, 'ExtendedData');
+    if (ed) {
+      for (const d of ed.getElementsByTagNameNS('*', 'Data')) { const k = d.getAttribute('name'); if (k && !(k in props)) props[k] = textOf(kmlChild(d, 'value')).trim(); }
+      for (const d of ed.getElementsByTagNameNS('*', 'SimpleData')) { const k = d.getAttribute('name'); if (k && !(k in props)) props[k] = d.textContent.trim(); }
+    }
+    features.push({ type: 'Feature', properties: props, geometry: geom });
+  }
+  return [{ name: layerName, features }];
+}
+async function kmlTextOf(job) {
+  if (job.ext !== 'kmz') return job.blob.text();
+  const zip = await JSZip.loadAsync(job.blob);
+  const files = zip.file(/\.kml$/i);
+  if (!files.length) throw new Error('A KMZ nem tartalmaz KML fájlt');
+  const f = files.find(x => /(^|\/)doc\.kml$/i.test(x.name)) || files[0];
+  return f.async('string');
+}
+/** KML-ben tárolt EOV koordináták (nem szabványos) átírása a dokumentum többi részének megtartásával. */
+async function rewriteKmlCoords(text, srcKey, dstKey, opt) {
+  const doc = parseXml(text, 'KML');
+  const els = Array.from(doc.getElementsByTagNameNS('*', 'coordinates'));
+  const lists = els.map(e => parseCoordText(e.textContent));
+  const pos = lists.flat();
+  if (!pos.length) throw new Error('Nincs koordináta a KML-ben');
+  const xy = new Float64Array(pos.length * 2), z = new Float64Array(pos.length);
+  pos.forEach((p, i) => { xy[2 * i] = p[0]; xy[2 * i + 1] = p[1]; z[i] = p[2] || 0; });
+  const r = await transformXY(srcKey, dstKey, xy, z, opt);
+  handleOutside(r, srcKey, dstKey, xy, z, pos.length, opt);
+  let k = 0;
+  els.forEach((e, j) => {
+    e.textContent = lists[j].map(p => { const s = fmtCoord(r.xy[2 * k], dstKey) + ',' + fmtCoord(r.xy[2 * k + 1], dstKey) + (p.length > 2 ? ',' + +r.z[k].toFixed(3) : ''); k++; return s; }).join(' ');
+  });
+  return { text: new XMLSerializer().serializeToString(doc), r: Object.assign(r, { points: pos.length }) };
+}
+const fmtCoord = (v, dstKey) => String(+v.toFixed(CRS[dstKey].kind === 'geo' ? 9 : 3));
+
+const KML_STYLES =
+  '<Style id="poly"><LineStyle><color>ff00b4ff</color><width>2</width></LineStyle><PolyStyle><color>4000b4ff</color></PolyStyle></Style>\n' +
+  '<Style id="line"><LineStyle><color>ff00b4ff</color><width>3</width></LineStyle></Style>\n' +
+  '<Style id="pt"><IconStyle><scale>0.9</scale></IconStyle></Style>\n';
+const NAME_KEYS = ['name', 'nev', 'név', 'megnevezes', 'megnevezés', 'hrsz', 'helyrajzi_szam', 'label', 'title', 'azonosito', 'azonosító', 'polazon', 'id', 'fid'];
+function pickNameKey(props) {
+  const keys = Object.keys(props);
+  for (const c of NAME_KEYS) { const k = keys.find(x => x.toLowerCase() === c); if (k && props[k] !== null && props[k] !== '') return k; }
+  return keys.find(k => typeof props[k] === 'string' && props[k].trim()) || null;
+}
+function kmlCoordStr(arr) { return arr.map(p => +p[0].toFixed(9) + ',' + +p[1].toFixed(9) + (p.length > 2 ? ',' + +p[2].toFixed(3) : '')).join(' '); }
+function kmlGeomXml(g) {
+  if (!g) return '';
+  switch (g.type) {
+    case 'Point': return `<Point><coordinates>${kmlCoordStr([g.coordinates])}</coordinates></Point>`;
+    case 'LineString': return `<LineString><tessellate>1</tessellate><coordinates>${kmlCoordStr(g.coordinates)}</coordinates></LineString>`;
+    case 'Polygon': return '<Polygon><tessellate>1</tessellate>' + g.coordinates.map((r, i) =>
+      `<${i ? 'inner' : 'outer'}BoundaryIs><LinearRing><coordinates>${kmlCoordStr(r)}</coordinates></LinearRing></${i ? 'inner' : 'outer'}BoundaryIs>`).join('') + '</Polygon>';
+    case 'MultiPoint': return '<MultiGeometry>' + g.coordinates.map(c => kmlGeomXml({ type: 'Point', coordinates: c })).join('') + '</MultiGeometry>';
+    case 'MultiLineString': return '<MultiGeometry>' + g.coordinates.map(c => kmlGeomXml({ type: 'LineString', coordinates: c })).join('') + '</MultiGeometry>';
+    case 'MultiPolygon': return '<MultiGeometry>' + g.coordinates.map(c => kmlGeomXml({ type: 'Polygon', coordinates: c })).join('') + '</MultiGeometry>';
+    case 'GeometryCollection': return '<MultiGeometry>' + g.geometries.map(kmlGeomXml).join('') + '</MultiGeometry>';
+  }
+  return '';
+}
+function kmlStyleOf(g) {
+  const t = g.type === 'GeometryCollection' ? (g.geometries[0] || {}).type : g.type;
+  return /Polygon/.test(t) ? '#poly' : /LineString/.test(t) ? '#line' : '#pt';
+}
+function writeKml(layers, title) {
+  const out = ['<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document>\n',
+    `<name>${escXml(title)}</name>\n`, KML_STYLES];
+  for (const L of layers) {
+    const folder = layers.length > 1;
+    if (folder) out.push(`<Folder><name>${escXml(L.name)}</name>\n`);
+    for (const f of L.features) {
+      const g = kmlGeomXml(f.geometry);
+      if (!g) continue;
+      const props = f.properties || {}, nk = pickNameKey(props);
+      let s = '<Placemark>';
+      if (nk) s += `<name>${escXml(props[nk])}</name>`;
+      s += `<styleUrl>${kmlStyleOf(f.geometry)}</styleUrl>`;
+      const keys = Object.keys(props).filter(k => props[k] !== null && props[k] !== undefined && props[k] !== '');
+      if (keys.length) s += '<ExtendedData>' + keys.map(k => `<Data name="${escXml(k)}"><value>${escXml(typeof props[k] === 'object' ? JSON.stringify(props[k]) : props[k])}</value></Data>`).join('') + '</ExtendedData>';
+      out.push(s + g + '</Placemark>\n');
+    }
+    if (folder) out.push('</Folder>\n');
+  }
+  out.push('</Document>\n</kml>\n');
+  return out.join('');
+}
+
+/* =====================================================================
+ *  GeoJSON
+ * ===================================================================== */
+function geojsonFeatureRefs(obj) {
+  if (!obj || typeof obj !== 'object') throw new Error('Hibás GeoJSON');
+  if (obj.type === 'FeatureCollection') return obj.features || [];
+  if (obj.type === 'Feature') return [obj];
+  if (obj.type && (obj.coordinates || obj.geometries)) return [{ geometry: obj }];
+  throw new Error('Ismeretlen GeoJSON típus: ' + obj.type);
+}
+function crsFromGeoJson(obj, features) {
+  const nm = obj && obj.crs && obj.crs.properties && obj.crs.properties.name;
+  if (nm) {
+    const m = /(\d{4,5})\s*$/.exec(nm);
+    if (m && CRS['EPSG:' + m[1]]) return 'EPSG:' + m[1];
+    if (/CRS84/i.test(nm)) return 'EPSG:4326';
+  }
+  return crsFromBBox(featuresBBox(features));
+}
+function setGeoJsonCrs(obj, dstKey) {
+  if (dstKey === 'EPSG:4326') delete obj.crs;
+  else obj.crs = { type: 'name', properties: { name: 'urn:ogc:def:crs:EPSG::' + CRS[dstKey].code } };
+}
+function stripBBox(o) {
+  if (!o || typeof o !== 'object') return;
+  delete o.bbox;
+  if (Array.isArray(o.features)) o.features.forEach(stripBBox);
+  if (o.geometry) stripBBox(o.geometry);
+  if (Array.isArray(o.geometries)) o.geometries.forEach(stripBBox);
+}
+function writeGeoJson(layers, dstKey, name) {
+  const feats = layers.flatMap(l => l.features);
+  roundFeatures(feats, dstKey);
+  const fc = { type: 'FeatureCollection', name };
+  setGeoJsonCrs(fc, dstKey);
+  fc.features = feats.map(f => ({ type: 'Feature', properties: f.properties || {}, geometry: f.geometry }));
+  return JSON.stringify(fc);
+}
+
+/* =====================================================================
+ *  Shapefile (SHP / SHX / DBF) olvasás, helyben átírás, írás
+ * ===================================================================== */
+const SHP_TYPES = { 0: 'Null', 1: 'Point', 3: 'PolyLine', 5: 'Polygon', 8: 'MultiPoint', 11: 'PointZ', 13: 'PolyLineZ', 15: 'PolygonZ', 18: 'MultiPointZ', 21: 'PointM', 23: 'PolyLineM', 25: 'PolygonM', 28: 'MultiPointM', 31: 'MultiPatch' };
+/** Végigmegy a .shp rekordjain, és megjegyzi, hol vannak a koordináták (bájt-offsetek). */
+function walkShp(buf) {
+  const dv = new DataView(buf);
+  if (buf.byteLength < 100 || dv.getInt32(0, false) !== 9994) throw new Error('Nem érvényes .shp fájl');
+  const end = Math.min(buf.byteLength, dv.getInt32(24, false) * 2 || buf.byteLength);
+  const recs = [];
+  let p = 100;
+  while (p + 12 <= end) {
+    const clen = dv.getInt32(p + 4, false) * 2, c = p + 8;
+    if (clen < 4 || c + clen > buf.byteLength) break;
+    const t = dv.getInt32(c, true);
+    const r = { start: p, c, clen, t, nPts: 0, ptsOff: -1, bboxOff: -1, nParts: 0, partsOff: -1, zOff: -1, zRangeOff: -1 };
+    if (t === 1 || t === 11 || t === 21) { r.nPts = 1; r.ptsOff = c + 4; if (t === 11) r.zOff = c + 20; }
+    else if (t === 8 || t === 18 || t === 28) {
+      r.bboxOff = c + 4; r.nPts = dv.getInt32(c + 36, true); r.ptsOff = c + 40;
+      if (t === 18) { r.zRangeOff = r.ptsOff + 16 * r.nPts; r.zOff = r.zRangeOff + 16; }
+    } else if (t === 3 || t === 5 || t === 13 || t === 15 || t === 23 || t === 25 || t === 31) {
+      r.bboxOff = c + 4; r.nParts = dv.getInt32(c + 36, true); r.nPts = dv.getInt32(c + 40, true); r.partsOff = c + 44;
+      r.ptsOff = r.partsOff + 4 * r.nParts * (t === 31 ? 2 : 1);
+      if (t === 13 || t === 15 || t === 31) { r.zRangeOff = r.ptsOff + 16 * r.nPts; r.zOff = r.zRangeOff + 16; }
+    }
+    if (r.ptsOff >= 0 && r.ptsOff + 16 * r.nPts > c + clen) throw new Error(`Sérült .shp rekord (#${recs.length + 1})`);
+    if (r.zOff >= 0 && r.zOff + 8 * r.nPts > c + clen) { r.zOff = -1; r.zRangeOff = -1; }
+    recs.push(r);
+    p = c + clen;
+  }
+  return recs;
+}
+function shpRecordToGeom(dv, r) {
+  if (!r.nPts) return null;
+  const pt = i => {
+    const x = dv.getFloat64(r.ptsOff + 16 * i, true), y = dv.getFloat64(r.ptsOff + 16 * i + 8, true);
+    return r.zOff >= 0 ? [x, y, dv.getFloat64(r.zOff + 8 * i, true)] : [x, y];
+  };
+  const t = r.t;
+  if (t === 1 || t === 11 || t === 21) return { type: 'Point', coordinates: pt(0) };
+  if (t === 8 || t === 18 || t === 28) {
+    const c = []; for (let i = 0; i < r.nPts; i++) c.push(pt(i));
+    return c.length === 1 ? { type: 'Point', coordinates: c[0] } : { type: 'MultiPoint', coordinates: c };
+  }
+  const parts = [];
+  for (let k = 0; k < r.nParts; k++) {
+    const s = dv.getInt32(r.partsOff + 4 * k, true), e = k + 1 < r.nParts ? dv.getInt32(r.partsOff + 4 * (k + 1), true) : r.nPts;
+    const ring = []; for (let i = s; i < e; i++) ring.push(pt(i));
+    if (ring.length) parts.push(ring);
+  }
+  if (t === 3 || t === 13 || t === 23) {
+    const ls = parts.filter(p => p.length >= 2);
+    if (!ls.length) return null;
+    return ls.length === 1 ? { type: 'LineString', coordinates: ls[0] } : { type: 'MultiLineString', coordinates: ls };
+  }
+  return ringsToPolygons(parts.map(closeRing));
+}
+function shpHeaderBBox(buf) {
+  const dv = new DataView(buf);
+  return [dv.getFloat64(36, true), dv.getFloat64(44, true), dv.getFloat64(52, true), dv.getFloat64(60, true)];
+}
+function buildShx(shp, recs) {
+  const shx = new ArrayBuffer(100 + 8 * recs.length), d = new DataView(shx);
+  new Uint8Array(shx).set(new Uint8Array(shp, 0, 100));
+  d.setInt32(24, (100 + 8 * recs.length) / 2, false);
+  recs.forEach((r, i) => { d.setInt32(100 + 8 * i, r.start / 2, false); d.setInt32(104 + 8 * i, r.clen / 2, false); });
+  return shx;
+}
+
+/* ---- DBF ---- */
+function dbfDecoder(cpgText, ldid, sample) {
+  const c = String(cpgText || '').trim().toUpperCase();
+  let enc = null;
+  if (/UTF-?8/.test(c)) enc = 'utf-8';
+  else if (/1250/.test(c)) enc = 'windows-1250';
+  else if (/1252/.test(c)) enc = 'windows-1252';
+  else if (/8859-?2|88592/.test(c)) enc = 'iso-8859-2';
+  else if (/8859-?1|88591/.test(c)) enc = 'iso-8859-1';
+  if (!enc && ldid === 0xC8) enc = 'windows-1250';
+  if (!enc) { try { new TextDecoder('utf-8', { fatal: true }).decode(sample); enc = 'utf-8'; } catch (e) { enc = 'windows-1250'; } }
+  return new TextDecoder(enc);
+}
+function readDbf(buf, cpgText) {
+  const dv = new DataView(buf), u8 = new Uint8Array(buf);
+  const nRec = dv.getUint32(4, true), hLen = dv.getUint16(8, true), rLen = dv.getUint16(10, true);
+  const dec = dbfDecoder(cpgText, u8[29], u8.subarray(hLen, Math.min(buf.byteLength, hLen + nRec * rLen)));
+  const fields = [];
+  for (let p = 32; p + 32 <= hLen && u8[p] !== 0x0D; p += 32) {
+    let nl = u8.subarray(p, p + 11).indexOf(0); if (nl < 0) nl = 11;
+    fields.push({ name: dec.decode(u8.subarray(p, p + nl)).trim(), type: String.fromCharCode(u8[p + 11]), len: u8[p + 16] });
+  }
+  const rows = [];
+  for (let r = 0; r < nRec; r++) {
+    const off = hLen + r * rLen;
+    if (off + rLen > buf.byteLength) break;
+    const row = {};
+    let fo = off + 1;
+    for (const f of fields) {
+      const raw = u8.subarray(fo, fo + f.len); fo += f.len;
+      let v;
+      if (f.type === 'N' || f.type === 'F') { const s = dec.decode(raw).trim(); v = s === '' || /^\*+$/.test(s) ? null : Number(s); if (Number.isNaN(v)) v = null; }
+      else if (f.type === 'L') { const s = String.fromCharCode(raw[0]).toUpperCase(); v = 'TY'.includes(s) ? true : 'FN'.includes(s) ? false : null; }
+      else if (f.type === 'D') { const s = dec.decode(raw).trim(); v = /^\d{8}$/.test(s) ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6)}` : null; }
+      else if (f.type === 'M' || f.type === 'B' || f.type === 'G') v = null;
+      else { v = dec.decode(raw).replace(/[\s\0]+$/, ''); }
+      row[f.name] = v;
+    }
+    rows.push(row);
+  }
+  return { fields, rows };
+}
+let CP1250 = null;
+function encodeCp1250(str) {
+  if (!CP1250) {
+    CP1250 = new Map();
+    const d = new TextDecoder('windows-1250');
+    for (let b = 0x80; b <= 0xFF; b++) { const ch = d.decode(new Uint8Array([b])); if (ch !== '�') CP1250.set(ch, b); }
+  }
+  const out = new Uint8Array(str.length);
+  let k = 0;
+  for (const ch of str) { const c = ch.codePointAt(0); out[k++] = c < 0x80 ? c : (CP1250.get(ch) ?? 0x3F); }
+  return out.subarray(0, k);
+}
+function truncUtf8(b, max) {
+  if (b.length <= max) return b;
+  let e = max;
+  while (e > 0 && (b[e] & 0xC0) === 0x80) e--;
+  return b.subarray(0, e);
+}
+function dbfFieldName(k, used) {
+  let n = String(k).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9_]/g, '_');
+  if (!n || /^[0-9]/.test(n)) n = 'F' + n;
+  n = n.slice(0, 10);
+  let cand = n, i = 1;
+  while (used.has(cand.toUpperCase())) { const s = '_' + i++; cand = n.slice(0, 10 - s.length) + s; }
+  used.add(cand.toUpperCase());
+  return cand;
+}
+const asciiBytes = s => { const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0x7F; return b; };
+function writeDbf(rows, encName) {
+  const enc = encName === 'windows-1250' ? encodeCp1250 : (s => new TextEncoder().encode(s));
+  const keys = [], seen = new Set();
+  for (const r of rows) for (const k of Object.keys(r || {})) if (!seen.has(k)) { seen.add(k); keys.push(k); }
+  const used = new Set(), fields = [];
+  for (const k of keys) {
+    const vals = rows.map(r => (r ? r[k] : null));
+    let allNum = true, allBool = true, any = false;
+    for (const v of vals) {
+      if (v === null || v === undefined || v === '') continue;
+      any = true;
+      if (!(typeof v === 'number' && Number.isFinite(v))) allNum = false;
+      if (typeof v !== 'boolean') allBool = false;
+    }
+    const name = dbfFieldName(k, used);
+    if (any && allNum) {
+      let dec = 0;
+      for (const v of vals) if (typeof v === 'number') { const s = String(v); const d = /e/i.test(s) ? 8 : (s.indexOf('.') < 0 ? 0 : s.length - s.indexOf('.') - 1); if (d > dec) dec = Math.min(8, d); }
+      const strs = vals.map(v => (typeof v === 'number' && Number.isFinite(v) ? v.toFixed(dec) : ''));
+      let len = 1; for (const s of strs) if (s.length > len) len = s.length;
+      if (len <= 19) { fields.push({ name, type: 'N', len, dec, cells: strs.map(s => asciiBytes(s.padStart(len))) }); continue; }
+    }
+    if (any && allBool) { fields.push({ name, type: 'L', len: 1, dec: 0, cells: vals.map(v => asciiBytes(v === true ? 'T' : v === false ? 'F' : '?')) }); continue; }
+    const cells = vals.map(v => v === null || v === undefined ? new Uint8Array(0) : truncUtf8(enc(typeof v === 'object' ? JSON.stringify(v) : String(v)), 254));
+    let len = 1; for (const c of cells) if (c.length > len) len = c.length;
+    fields.push({ name, type: 'C', len, dec: 0, cells });
+  }
+  if (!fields.length) fields.push({ name: 'id', type: 'N', len: 10, dec: 0, cells: rows.map((_, i) => asciiBytes(String(i + 1).padStart(10))) });
+  const hLen = 32 + 32 * fields.length + 1, rLen = 1 + fields.reduce((s, f) => s + f.len, 0);
+  const buf = new Uint8Array(hLen + rLen * rows.length + 1), dv = new DataView(buf.buffer);
+  const now = new Date();
+  buf[0] = 0x03; buf[1] = now.getFullYear() - 1900; buf[2] = now.getMonth() + 1; buf[3] = now.getDate();
+  dv.setUint32(4, rows.length, true); dv.setUint16(8, hLen, true); dv.setUint16(10, rLen, true);
+  buf[29] = encName === 'windows-1250' ? 0xC8 : 0x00;
+  fields.forEach((f, i) => {
+    const p = 32 + 32 * i;
+    buf.set(asciiBytes(f.name).subarray(0, 10), p);
+    buf[p + 11] = f.type.charCodeAt(0); buf[p + 16] = f.len; buf[p + 17] = f.dec;
+  });
+  buf[hLen - 1] = 0x0D;
+  buf.fill(0x20, hLen, hLen + rLen * rows.length);
+  for (let r = 0; r < rows.length; r++) {
+    let p = hLen + r * rLen + 1;
+    for (const f of fields) { buf.set(f.cells[r], p); p += f.len; }
+  }
+  buf[buf.length - 1] = 0x1A;
+  return buf;
+}
+
+/* ---- SHP írás (feature-ökből) ---- */
+const SHP_KIND_BASE = { point: 1, multipoint: 8, line: 3, polygon: 5 };
+function shpKindOf(type) {
+  return type === 'Point' ? 'point' : type === 'MultiPoint' ? 'multipoint' : /LineString/.test(type) ? 'line' : /Polygon/.test(type) ? 'polygon' : null;
+}
+function shpPartsOf(g, kind) {
+  if (kind === 'point') return [[g.coordinates]];
+  if (kind === 'multipoint') return [g.type === 'Point' ? [g.coordinates] : g.coordinates];
+  if (kind === 'line') return g.type === 'LineString' ? [g.coordinates] : g.coordinates;
+  const polys = g.type === 'Polygon' ? [g.coordinates] : g.coordinates, rings = [];
+  for (const poly of polys) poly.forEach((ring, i) => {
+    const r = closeRing(ring.map(p => p.slice()));
+    if (r.length < 4) return;
+    const a = ringArea(r);
+    if ((i === 0 && a > 0) || (i > 0 && a < 0)) r.reverse(); // shapefile: külső = óramutató szerint, lyuk = ellentétes
+    rings.push(r);
+  });
+  return rings;
+}
+function writeShp(geoms, kind, hasZ) {
+  const type = SHP_KIND_BASE[kind] + (hasZ ? 10 : 0);
+  const recs = geoms.map(g => { const parts = shpPartsOf(g, kind).filter(p => p.length); return { parts, n: parts.reduce((s, p) => s + p.length, 0) }; });
+  const lens = recs.map(r => !r.n ? 4 : kind === 'point' ? (hasZ ? 36 : 20)
+    : kind === 'multipoint' ? 40 + 16 * r.n + (hasZ ? 16 + 8 * r.n : 0)
+    : 44 + 4 * r.parts.length + 16 * r.n + (hasZ ? 16 + 8 * r.n : 0));
+  const total = 100 + lens.reduce((s, l) => s + 8 + l, 0);
+  const shp = new ArrayBuffer(total), shx = new ArrayBuffer(100 + 8 * recs.length);
+  const dv = new DataView(shp), dx = new DataView(shx);
+  const G = [Infinity, Infinity, -Infinity, -Infinity, Infinity, -Infinity];
+  let p = 100;
+  recs.forEach((r, i) => {
+    dx.setInt32(100 + 8 * i, p / 2, false); dx.setInt32(104 + 8 * i, lens[i] / 2, false);
+    dv.setInt32(p, i + 1, false); dv.setInt32(p + 4, lens[i] / 2, false);
+    const c = p + 8;
+    p = c + lens[i];
+    if (!r.n) { dv.setInt32(c, 0, true); return; }
+    dv.setInt32(c, type, true);
+    const pts = r.parts.flat();
+    const B = [Infinity, Infinity, -Infinity, -Infinity, Infinity, -Infinity];
+    for (const q of pts) {
+      const z = q.length > 2 && Number.isFinite(q[2]) ? q[2] : 0;
+      if (q[0] < B[0]) B[0] = q[0]; if (q[1] < B[1]) B[1] = q[1]; if (q[0] > B[2]) B[2] = q[0]; if (q[1] > B[3]) B[3] = q[1];
+      if (z < B[4]) B[4] = z; if (z > B[5]) B[5] = z;
+    }
+    for (const k of [0, 1, 4]) G[k] = Math.min(G[k], B[k]);
+    for (const k of [2, 3, 5]) G[k] = Math.max(G[k], B[k]);
+    if (kind === 'point') {
+      const q = pts[0];
+      dv.setFloat64(c + 4, q[0], true); dv.setFloat64(c + 12, q[1], true);
+      if (hasZ) { dv.setFloat64(c + 20, q.length > 2 && Number.isFinite(q[2]) ? q[2] : 0, true); dv.setFloat64(c + 28, 0, true); }
+      return;
+    }
+    for (let k = 0; k < 4; k++) dv.setFloat64(c + 4 + 8 * k, B[k], true);
+    let o;
+    if (kind === 'multipoint') { dv.setInt32(c + 36, r.n, true); o = c + 40; }
+    else {
+      dv.setInt32(c + 36, r.parts.length, true); dv.setInt32(c + 40, r.n, true);
+      let s = 0; r.parts.forEach((part, k) => { dv.setInt32(c + 44 + 4 * k, s, true); s += part.length; });
+      o = c + 44 + 4 * r.parts.length;
+    }
+    for (const q of pts) { dv.setFloat64(o, q[0], true); dv.setFloat64(o + 8, q[1], true); o += 16; }
+    if (hasZ) {
+      dv.setFloat64(o, B[4], true); dv.setFloat64(o + 8, B[5], true); o += 16;
+      for (const q of pts) { dv.setFloat64(o, q.length > 2 && Number.isFinite(q[2]) ? q[2] : 0, true); o += 8; }
+    }
+  });
+  for (const [buf, d] of [[shp, dv], [shx, dx]]) {
+    d.setInt32(0, 9994, false); d.setInt32(24, buf.byteLength / 2, false); d.setInt32(28, 1000, true); d.setInt32(32, type, true);
+    const ok = Number.isFinite(G[0]);
+    for (let k = 0; k < 4; k++) d.setFloat64(36 + 8 * k, ok ? G[k] : 0, true);
+    d.setFloat64(68, hasZ && ok ? G[4] : 0, true); d.setFloat64(76, hasZ && ok ? G[5] : 0, true);
+  }
+  return { shp, shx };
+}
+function writeShpFiles(layers, dstKey, outBase, encName) {
+  const groups = { polygon: [], line: [], point: [], multipoint: [] };
+  const put = (g, props) => {
+    if (!g) return;
+    if (g.type === 'GeometryCollection') { g.geometries.forEach(x => put(x, props)); return; }
+    const k = shpKindOf(g.type);
+    if (k) groups[k].push({ g, props });
+  };
+  for (const L of layers) for (const f of L.features) put(f.geometry, f.properties || {});
+  const kinds = Object.keys(groups).filter(k => groups[k].length);
+  if (!kinds.length) throw new Error('Nincs shapefile-ba írható geometria');
+  const suffix = { point: '_pont', multipoint: '_multipont', line: '_vonal', polygon: '_poligon' };
+  const files = [];
+  for (const k of kinds) {
+    const items = groups[k];
+    let hasZ = false;
+    for (const it of items) eachPosition(it.g, q => { if (q.length > 2 && q[2]) hasZ = true; });
+    const { shp, shx } = writeShp(items.map(it => it.g), k, hasZ);
+    const name = outBase + (kinds.length > 1 ? suffix[k] : '');
+    files.push({ name: name + '.shp', data: shp }, { name: name + '.shx', data: shx },
+      { name: name + '.dbf', data: writeDbf(items.map(it => it.props), encName) },
+      { name: name + '.prj', data: CRS[dstKey].prj }, { name: name + '.cpg', data: encName === 'windows-1250' ? '1250' : 'UTF-8' });
+  }
+  return files;
+}
+
+/** Shapefile → shapefile: csak a koordináták (és befoglalók) íródnak át, minden más bájtra marad. */
+async function rewriteShpFiles(job, srcKey, dstKey, outBase, opt) {
+  const shp = job.shpBuf.slice(0), recs = walkShp(shp), dv = new DataView(shp);
+  let N = 0; for (const r of recs) N += r.nPts;
+  if (!N) throw new Error('A shapefile nem tartalmaz pontot');
+  const hasZ = recs.some(r => r.zOff >= 0);
+  const xy = new Float64Array(2 * N), z = hasZ ? new Float64Array(N) : null;
+  let k = 0;
+  for (const r of recs) for (let i = 0; i < r.nPts; i++, k++) {
+    xy[2 * k] = dv.getFloat64(r.ptsOff + 16 * i, true); xy[2 * k + 1] = dv.getFloat64(r.ptsOff + 16 * i + 8, true);
+    if (z && r.zOff >= 0) z[k] = dv.getFloat64(r.zOff + 8 * i, true);
+  }
+  const res = await transformXY(srcKey, dstKey, xy, z, opt);
+  handleOutside(res, srcKey, dstKey, xy, z, N, opt);
+  const doZ = !!(opt.convertZ && hasZ);
+  const G = [Infinity, Infinity, -Infinity, -Infinity, Infinity, -Infinity];
+  k = 0;
+  for (const r of recs) {
+    const B = [Infinity, Infinity, -Infinity, -Infinity, Infinity, -Infinity];
+    for (let i = 0; i < r.nPts; i++, k++) {
+      const x = res.xy[2 * k], y = res.xy[2 * k + 1];
+      dv.setFloat64(r.ptsOff + 16 * i, x, true); dv.setFloat64(r.ptsOff + 16 * i + 8, y, true);
+      if (x < B[0]) B[0] = x; if (y < B[1]) B[1] = y; if (x > B[2]) B[2] = x; if (y > B[3]) B[3] = y;
+      if (doZ && r.zOff >= 0) { const zz = res.z[k]; dv.setFloat64(r.zOff + 8 * i, zz, true); if (zz < B[4]) B[4] = zz; if (zz > B[5]) B[5] = zz; }
+    }
+    if (!r.nPts) continue;
+    if (r.bboxOff >= 0) for (let q = 0; q < 4; q++) dv.setFloat64(r.bboxOff + 8 * q, B[q], true);
+    if (doZ && r.zRangeOff >= 0) { dv.setFloat64(r.zRangeOff, B[4], true); dv.setFloat64(r.zRangeOff + 8, B[5], true); }
+    G[0] = Math.min(G[0], B[0]); G[1] = Math.min(G[1], B[1]); G[2] = Math.max(G[2], B[2]); G[3] = Math.max(G[3], B[3]);
+    G[4] = Math.min(G[4], B[4]); G[5] = Math.max(G[5], B[5]);
+  }
+  for (let q = 0; q < 4; q++) dv.setFloat64(36 + 8 * q, G[q], true);
+  if (doZ && Number.isFinite(G[4])) { dv.setFloat64(68, G[4], true); dv.setFloat64(76, G[5], true); }
+  const shx = job.parts.shx ? (await job.parts.shx.blob.arrayBuffer()).slice(0) : buildShx(shp, recs);
+  new Uint8Array(shx).set(new Uint8Array(shp, 36, 64), 36);
+  const files = [{ name: outBase + '.shp', data: shp }, { name: outBase + '.shx', data: shx }];
+  if (job.parts.dbf) files.push({ name: outBase + '.dbf', data: job.parts.dbf.blob });
+  else files.push({ name: outBase + '.dbf', data: writeDbf(recs.map(() => ({})), 'utf-8') });
+  files.push({ name: outBase + '.prj', data: CRS[dstKey].prj });
+  if (job.parts.cpg) files.push({ name: outBase + '.cpg', data: job.parts.cpg.blob });
+  res.points = N;
+  return { files, r: res };
+}
+async function readShpLayers(job) {
+  const dv = new DataView(job.shpBuf), recs = walkShp(job.shpBuf);
+  let rows = [];
+  if (job.parts.dbf) {
+    const cpg = job.parts.cpg ? await job.parts.cpg.blob.text() : null;
+    rows = readDbf(await job.parts.dbf.blob.arrayBuffer(), cpg).rows;
+  }
+  const features = [];
+  recs.forEach((r, i) => { const g = shpRecordToGeom(dv, r); if (g) features.push({ type: 'Feature', properties: rows[i] || {}, geometry: g }); });
+  return [{ name: job.base, features }];
+}
+
+/* =====================================================================
+ *  GeoTIFF
+ * ===================================================================== */
+const TIFF_COMPRESSION = { 1: 'tömörítetlen', 5: 'LZW', 7: 'JPEG', 8: 'Deflate', 32946: 'Deflate', 32773: 'PackBits', 34887: 'LERC', 50000: 'ZSTD', 50001: 'WebP' };
+function sampleTypeName(bits, sf) { return (sf === 3 ? 'float' : sf === 2 ? 'int' : 'uint') + bits; }
+/** pixel (u,v) – a pixelsarok-alapú raszterkoordináta – → forrás KR. */
+function srcAffine(img) {
+  const fd = img.fileDirectory;
+  let a, b, c, d, e, f;
+  if (fd.ModelTransformation) { const m = fd.ModelTransformation; a = m[0]; b = m[1]; c = m[3]; d = m[4]; e = m[5]; f = m[7]; }
+  else if (fd.ModelPixelScale && fd.ModelTiepoint) {
+    const s = fd.ModelPixelScale, t = fd.ModelTiepoint;
+    a = s[0]; b = 0; d = 0; e = -s[1]; c = t[3] - t[0] * a; f = t[4] - t[1] * e;
+  } else throw new Error('A GeoTIFF nem tartalmaz georeferálást (ModelTiepoint / ModelTransformation)');
+  const gk = img.getGeoKeys() || {};
+  if (gk.GTRasterTypeGeoKey === 2) { c -= 0.5 * (a + b); f -= 0.5 * (d + e); } // PixelIsPoint
+  const det = a * e - b * d;
+  if (!det) throw new Error('Hibás georeferálás (nulla pixelméret)');
+  return { a, b, c, d, e, f, det };
+}
+function fitAffine(xs, ys, vals) { // vals ≈ p0 + p1*x + p2*y, legkisebb négyzetek
+  const M = [[0, 0, 0], [0, 0, 0], [0, 0, 0]], r = [0, 0, 0];
+  for (let i = 0; i < xs.length; i++) {
+    if (!Number.isFinite(vals[i])) continue;
+    const v = [1, xs[i], ys[i]];
+    for (let a = 0; a < 3; a++) { r[a] += v[a] * vals[i]; for (let b = 0; b < 3; b++) M[a][b] += v[a] * v[b]; }
+  }
+  const det3 = m => m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+  const D = det3(M);
+  if (!D) return null;
+  return [0, 1, 2].map(k => det3(M.map((row, i) => row.map((x, j) => (j === k ? r[i] : x)))) / D);
+}
+function metersPerUnit(dstKey, lat) {
+  return CRS[dstKey].kind === 'geo' ? [111320 * Math.cos(lat * Math.PI / 180), 110574] : [1, 1];
+}
+
+/* ---- TIFF írás segédek ---- */
+function tiffHeader(big, le, ifdOffset) {
+  const b = new Uint8Array(big ? 16 : 8), d = new DataView(b.buffer);
+  b[0] = b[1] = le ? 0x49 : 0x4D;
+  d.setUint16(2, big ? 43 : 42, le);
+  if (big) { d.setUint16(4, 8, le); d.setUint16(6, 0, le); d.setBigUint64(8, BigInt(ifdOffset), le); }
+  else d.setUint32(4, ifdOffset, le);
+  return b;
+}
+/** IFD + adatterület. entries: {tag,type,value} vagy {tag,raw} (forrásfájlból bájtra másolt bejegyzés). */
+function buildIfd(entries, offset, big, le, nextIfd = 0) {
+  entries = entries.slice().sort((a, b) => a.tag - b.tag);
+  const TS = { 1: 1, 2: 1, 3: 2, 4: 4, 12: 8, 16: 8 };
+  const inl = big ? 8 : 4, esz = big ? 20 : 12, csz = big ? 8 : 2, nsz = big ? 8 : 4;
+  const enc = entries.map(e => {
+    if (e.raw) return e;
+    let bytes, count;
+    if (e.type === 2) { bytes = new TextEncoder().encode(e.value + '\0'); count = bytes.length; }
+    else {
+      const v = e.value; count = v.length; bytes = new Uint8Array(count * TS[e.type]);
+      const d = new DataView(bytes.buffer);
+      for (let i = 0; i < count; i++) switch (e.type) {
+        case 1: d.setUint8(i, v[i]); break;
+        case 3: d.setUint16(2 * i, v[i], le); break;
+        case 4: d.setUint32(4 * i, v[i], le); break;
+        case 12: d.setFloat64(8 * i, v[i], le); break;
+        case 16: d.setBigUint64(8 * i, BigInt(v[i]), le); break;
+      }
+    }
+    return { tag: e.tag, type: e.type, count, bytes };
+  });
+  const head = csz + enc.length * esz + nsz;
+  let dataLen = 0;
+  for (const e of enc) if (!e.raw && e.bytes.length > inl) dataLen += (e.bytes.length + 7) & ~7;
+  const buf = new Uint8Array(head + dataLen), dv = new DataView(buf.buffer);
+  if (big) dv.setBigUint64(0, BigInt(enc.length), le); else dv.setUint16(0, enc.length, le);
+  let p = csz, dp = head;
+  for (const e of enc) {
+    if (e.raw) { buf.set(e.raw, p); p += esz; continue; }
+    dv.setUint16(p, e.tag, le); dv.setUint16(p + 2, e.type, le);
+    if (big) dv.setBigUint64(p + 4, BigInt(e.count), le); else dv.setUint32(p + 4, e.count, le);
+    const vo = p + (big ? 12 : 8);
+    if (e.bytes.length <= inl) buf.set(e.bytes, vo);
+    else {
+      const off = offset + dp;
+      if (big) dv.setBigUint64(vo, BigInt(off), le); else dv.setUint32(vo, off, le);
+      buf.set(e.bytes, dp); dp += (e.bytes.length + 7) & ~7;
+    }
+    p += esz;
+  }
+  if (big) dv.setBigUint64(p, BigInt(nextIfd), le); else dv.setUint32(p, nextIfd, le);
+  return buf;
+}
+function geoKeyEntries(dstKey) {
+  const c = CRS[dstKey], cit = c.citation + '|';
+  const keys = c.kind === 'geo'
+    ? [[1024, 0, 1, 2], [1025, 0, 1, 1], [1026, 34737, cit.length, 0], [2048, 0, 1, c.code], [2054, 0, 1, 9102]]
+    : [[1024, 0, 1, 1], [1025, 0, 1, 1], [1026, 34737, cit.length, 0], [3072, 0, 1, c.code], [3076, 0, 1, 9001]];
+  return [{ tag: 34735, type: 3, value: [1, 1, 0, keys.length, ...keys.flat()] }, { tag: 34737, type: 2, value: cit }];
+}
+async function readTiffIfd0(blob) {
+  const hb = new DataView(await blob.slice(0, 16).arrayBuffer());
+  const bo = hb.getUint16(0, true), le = bo === 0x4949;
+  if (!le && bo !== 0x4D4D) throw new Error('Nem TIFF fájl');
+  const magic = hb.getUint16(2, le), big = magic === 43;
+  if (!big && magic !== 42) throw new Error('Nem TIFF fájl');
+  const ifd = big ? Number(hb.getBigUint64(8, le)) : hb.getUint32(4, le);
+  const csz = big ? 8 : 2, esz = big ? 20 : 12, nsz = big ? 8 : 4;
+  const cd = new DataView(await blob.slice(ifd, ifd + csz).arrayBuffer());
+  const n = big ? Number(cd.getBigUint64(0, le)) : cd.getUint16(0, le);
+  const body = new Uint8Array(await blob.slice(ifd + csz, ifd + csz + n * esz + nsz).arrayBuffer()), bd = new DataView(body.buffer);
+  const entries = [];
+  for (let i = 0; i < n; i++) entries.push({ tag: bd.getUint16(i * esz, le), raw: body.slice(i * esz, (i + 1) * esz) });
+  const next = big ? Number(bd.getBigUint64(n * esz, le)) : bd.getUint32(n * esz, le);
+  return { le, big, headerLen: big ? 16 : 8, entries, next };
+}
+
+/** „Csak georeferencia” mód: a pixelek érintetlenek, új IFD a fájl végén, affin (forgatott) georeferenciával. */
+async function georefOnlyTiff(job, srcKey, dstKey, cb) {
+  const img = job.img, W = img.getWidth(), H = img.getHeight(), A = srcAffine(img);
+  const N = 9, us = [], vs = [], xy = new Float64Array(2 * N * N);
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    const u = i * W / (N - 1), v = j * H / (N - 1), k = us.length;
+    us.push(u); vs.push(v);
+    xy[2 * k] = A.a * u + A.b * v + A.c; xy[2 * k + 1] = A.d * u + A.e * v + A.f;
+  }
+  cb.progress(0.2, 'Illesztőpontok számítása (EHT2)…');
+  const r = await transformXY(srcKey, dstKey, xy, null, { signal: cb.signal });
+  const outside = r.bad;
+  if (outside && !fillOutsideCoverage(srcKey, dstKey, xy, r.xy)) throw badPointsError(r, N * N);
+  const X = [], Y = [];
+  for (let k = 0; k < N * N; k++) { X.push(r.xy[2 * k]); Y.push(r.xy[2 * k + 1]); }
+  const px = fitAffine(us, vs, X), py = fitAffine(us, vs, Y);
+  if (!px || !py) throw new Error('Az affin illesztés nem sikerült');
+  const [mx, my] = metersPerUnit(dstKey, Y[(N * N) >> 1]);
+  let maxRes = 0, ss = 0;
+  for (let k = 0; k < N * N; k++) {
+    const dx = (px[0] + px[1] * us[k] + px[2] * vs[k] - X[k]) * mx, dy = (py[0] + py[1] * us[k] + py[2] * vs[k] - Y[k]) * my;
+    const d = Math.hypot(dx, dy); ss += d * d; if (d > maxRes) maxRes = d;
+  }
+  const pixM = Math.sqrt(Math.abs((px[1] * py[2] - px[2] * py[1]) * mx * my));
+  const rot = Math.atan2(py[1] * my, px[1] * mx) * 180 / Math.PI;
+  cb.progress(0.7, 'Fejléc írása…');
+  const ifd0 = await readTiffIfd0(job.blob);
+  const GEO = new Set([33550, 33922, 34264, 34735, 34736, 34737]);
+  const entries = ifd0.entries.filter(e => !GEO.has(e.tag)).concat(
+    [{ tag: 34264, type: 12, value: [px[1], px[2], 0, px[0], py[1], py[2], 0, py[0], 0, 0, 0, 0, 0, 0, 0, 1] }], geoKeyEntries(dstKey));
+  const size = job.blob.size, pad = (8 - size % 8) % 8, off = size + pad;
+  const ifd = buildIfd(entries, off, ifd0.big, ifd0.le, ifd0.next);
+  if (!ifd0.big && off + ifd.length > 0xFFFFFFFF) throw new Error('A fájl túl nagy a klasszikus TIFF formátumhoz (4 GB) – használd az átmintavételezést');
+  const header = tiffHeader(ifd0.big, ifd0.le, off);
+  const blob = new Blob([header, job.blob.slice(header.length), new Uint8Array(pad), ifd], { type: 'image/tiff' });
+  return { blob, r: Object.assign(r, { georef: { maxRes, rms: Math.sqrt(ss / (N * N)), pixM, rot, outside, total: N * N } }) };
+}
+
+/* ---- Átmintavételezés: ezek a függvények Web Workerben is futnak (toString-gel kerülnek át), ezért önállóak ---- */
+function arrCtor(bits, sf) {
+  if (sf === 3) return bits === 32 ? Float32Array : bits === 64 ? Float64Array : null;
+  if (sf === 2) return bits === 8 ? Int8Array : bits === 16 ? Int16Array : bits === 32 ? Int32Array : null;
+  return bits === 8 ? Uint8Array : bits === 16 ? Uint16Array : bits === 32 ? Uint32Array : null;
+}
+function gridInterp(G, nx, ny, cellW, cellH, x, y) {
+  let fx = x / cellW, fy = y / cellH;
+  const i = Math.min(nx - 2, Math.max(0, Math.floor(fx))), j = Math.min(ny - 2, Math.max(0, Math.floor(fy)));
+  fx -= i; fy -= j;
+  const a = G[j * nx + i], b = G[j * nx + i + 1], c = G[(j + 1) * nx + i], d = G[(j + 1) * nx + i + 1];
+  return a * (1 - fx) * (1 - fy) + b * fx * (1 - fy) + c * (1 - fx) * fy + d * fx * fy;
+}
+function ycbcrToRgb(data) {
+  const cl = new Uint8ClampedArray(data.buffer, data.byteOffset, data.length);
+  for (let i = 0; i < data.length; i += 3) {
+    const Y = data[i], Cb = data[i + 1] - 128, Cr = data[i + 2] - 128;
+    cl[i] = Y + 1.402 * Cr; cl[i + 1] = Y - 0.34414 * Cb - 0.71414 * Cr; cl[i + 2] = Y + 1.772 * Cb;
+  }
+}
+function hPredict(a, w, hgt, spp) {
+  const rl = w * spp;
+  for (let r = 0; r < hgt; r++) { const o = r * rl; for (let i = rl - 1; i >= spp; i--) a[o + i] -= a[o + i - spp]; }
+}
+async function deflateBytes(u8) {
+  const s = new Blob([u8]).stream().pipeThrough(new CompressionStream('deflate'));
+  return new Uint8Array(await new Response(s).arrayBuffer());
+}
+async function inflateBytes(u8) {
+  const s = new Blob([u8]).stream().pipeThrough(new DecompressionStream('deflate'));
+  return new Uint8Array(await new Response(s).arrayBuffer());
+}
+/** TIFF LZW (MSB-first, „early change”). A szótár elemei a kimenetben már szereplő (offset, hossz) párok. */
+function lzwDecode(src, outLen) {
+  const out = new Uint8Array(outLen), codeOff = new Int32Array(4096), codeLen = new Int32Array(4096);
+  const totalBits = src.length * 8;
+  let bitPos = 0, nbits = 9, next = 258, op = 0, prevOff = 0, prevLen = 0;
+  while (bitPos + nbits <= totalBits) {
+    const bi = bitPos >>> 3;
+    const v = (src[bi] << 16) | (src[bi + 1] << 8) | src[bi + 2];
+    const code = (v >>> (24 - (bitPos & 7) - nbits)) & ((1 << nbits) - 1);
+    bitPos += nbits;
+    if (code === 257) break;
+    if (code === 256) { nbits = 9; next = 258; prevLen = 0; continue; }
+    let off, len;
+    if (code < 256) { off = -1; len = 1; }
+    else if (code < next) { off = codeOff[code]; len = codeLen[code]; }
+    else if (code === next && prevLen) { off = prevOff; len = prevLen + 1; }
+    else break; // hibás adatfolyam
+    if (op + len > outLen) len = outLen - op;
+    if (len <= 0) break;
+    if (off < 0) out[op] = code;
+    else if (code === next) { for (let k = 0; k < len - 1; k++) out[op + k] = out[off + k]; out[op + len - 1] = out[off]; }
+    else for (let k = 0; k < len; k++) out[op + k] = out[off + k];
+    if (prevLen && next < 4096) {
+      codeOff[next] = prevOff; codeLen[next] = prevLen + 1; next++;
+      if (next + 1 >= (1 << nbits) && nbits < 12) nbits++;
+    }
+    prevOff = op; prevLen = len; op += len;
+    if (op >= outLen) break;
+  }
+  return out;
+}
+/** Ablak beolvasása interleaved tömbbe. Gyors út: összefüggő bájttartomány egy olvasással, soronkénti másolás. */
+async function readWindow(ctx, img, blob, win) {
+  const fd = img.fileDirectory, comp = fd.Compression || 1, pred = fd.Predictor || 1;
+  const fast = blob && (fd.PlanarConfiguration || 1) === 1 && (img.littleEndian || ctx.bits === 8) &&
+    (fd.TileWidth ? fd.TileOffsets : fd.StripOffsets);
+  if (!fast) return img.readRasters({ window: win, interleave: true });
+  const nativeInflate = (comp === 8 || comp === 32946) && pred !== 3 && typeof DecompressionStream !== 'undefined';
+  const ownLzw = comp === 5 && pred !== 3, ownPred = (nativeInflate || ownLzw) && pred === 2;
+  if (comp !== 1 && !nativeInflate && !ownLzw && !ctx._dec) ctx._dec = await GeoTIFF.getDecoder(fd);
+  const { W, H, spp } = ctx, bps = ctx.bits / 8, Arr = arrCtor(ctx.bits, ctx.sf);
+  const [x0, y0, x1, y1] = win, ww = x1 - x0, wh = y1 - y0;
+  const out = new Arr(ww * wh * spp);
+  const tiled = !!fd.TileWidth;
+  const bw = tiled ? fd.TileWidth : W, bh = tiled ? fd.TileLength : Math.min(fd.RowsPerStrip || H, H);
+  const offs = tiled ? fd.TileOffsets : fd.StripOffsets, cnts = tiled ? fd.TileByteCounts : fd.StripByteCounts;
+  const across = Math.ceil(W / bw), rowLen = bw * spp;
+  const blocks = [];
+  let lo = Infinity, hi = 0, sum = 0;
+  for (let by = Math.floor(y0 / bh); by <= Math.floor((y1 - 1) / bh); by++)
+    for (let bx = Math.floor(x0 / bw); bx <= Math.floor((x1 - 1) / bw); bx++) {
+      const i = by * across + bx, o = Number(offs[i]), c = Number(cnts[i]);
+      blocks.push({ bx, by, o, c }); sum += c;
+      if (c) { lo = Math.min(lo, o); hi = Math.max(hi, o + c); }
+    }
+  const span = hi > lo && hi - lo <= 2 * sum + (1 << 20) ? await blob.slice(lo, hi).arrayBuffer() : null;
+  const decodeOne = async b => {
+    const rows = tiled ? bh : Math.min(bh, H - b.by * bh), need = rowLen * rows;
+    let bytes;
+    if (!b.c) bytes = new Uint8Array(need * bps);
+    else {
+      bytes = span ? new Uint8Array(span, b.o - lo, b.c) : new Uint8Array(await blob.slice(b.o, b.o + b.c).arrayBuffer());
+      if (nativeInflate) bytes = await inflateBytes(bytes);
+      else if (ownLzw) bytes = lzwDecode(bytes, need * bps);
+      else if (comp !== 1) bytes = new Uint8Array(await ctx._dec.decode(fd, bytes.slice().buffer));
+      if (bps > 1 && bytes.byteOffset % bps) bytes = bytes.slice();
+    }
+    const t = new Arr(bytes.buffer, bytes.byteOffset, Math.min(need, Math.floor(bytes.byteLength / bps)));
+    if (ownPred) for (let r = 0; r < rows; r++) { const o = r * rowLen, e = Math.min(o + rowLen, t.length); for (let i = o + spp; i < e; i++) t[i] += t[i - spp]; }
+    const ry0 = Math.max(y0, b.by * bh), ry1 = Math.min(y1, b.by * bh + rows);
+    const cx0 = Math.max(x0, b.bx * bw), cx1 = Math.min(x1, b.bx * bw + bw, W), n = (cx1 - cx0) * spp;
+    for (let y = ry0; y < ry1; y++) {
+      const s = ((y - b.by * bh) * bw + (cx0 - b.bx * bw)) * spp;
+      out.set(t.subarray(s, s + n), ((y - y0) * ww + (cx0 - x0)) * spp);
+    }
+  };
+  for (let i = 0; i < blocks.length; i += 16) await Promise.all(blocks.slice(i, i + 16).map(decodeOne));
+  return out;
+}
+function resampleInto(ctx, data, u0, v0, ww, wh, out, r0, r1, bandW) {
+  const { W, H, spp, outSpp, nx, ny, cellW, cellH, gu, gv, goff, Wout, alphaIdx, isFloat, addAlpha, maxVal } = ctx;
+  const nearestOnly = ctx.resample === 'nearest' || ctx.isPalette;
+  const nd = ctx.nodata, ndNaN = nd !== null && Number.isNaN(nd);
+  const checkNd = nd !== null && !ndNaN;
+  const ndCmp = checkNd ? (isFloat && ctx.bits === 32 ? Math.fround(nd) : nd) : 0;
+  const hasAlpha = alphaIdx >= 0, needValid = hasAlpha || isFloat || checkNd;
+  const fastRound = !isFloat && ctx.sf === 1 && ctx.bits <= 16;
+  const valid = i => {
+    const o = i * spp;
+    if (hasAlpha) return data[o + alphaIdx] !== 0;
+    if (isFloat && data[o] !== data[o]) return false;
+    if (checkNd) { for (let c = 0; c < spp; c++) if (data[o + c] !== ndCmp) return true; return false; }
+    return true;
+  };
+  const applyZ = !!goff;
+  for (let r = r0; r < r1; r++) {
+    const yc = r + 0.5;
+    let j = Math.floor(yc / cellH); if (j > ny - 2) j = ny - 2;
+    const fy = yc / cellH - j, rowOut = (r - r0) * bandW;
+    for (let i = 0; i < nx - 1; i++) {
+      const cs = Math.max(0, Math.ceil(i * cellW - 0.5));
+      const ce = i === nx - 2 ? Wout : Math.min(Wout, Math.ceil((i + 1) * cellW - 0.5));
+      if (ce <= cs) continue;
+      const a = j * nx + i, b = a + nx;
+      const uL = gu[a] + (gu[b] - gu[a]) * fy, uR = gu[a + 1] + (gu[b + 1] - gu[a + 1]) * fy;
+      const vL = gv[a] + (gv[b] - gv[a]) * fy, vR = gv[a + 1] + (gv[b + 1] - gv[a + 1]) * fy;
+      const du = (uR - uL) / cellW, dv = (vR - vL) / cellW, x0 = i * cellW;
+      let oL = 0, dO = 0;
+      if (applyZ) { oL = goff[a] + (goff[b] - goff[a]) * fy; dO = (goff[a + 1] + (goff[b + 1] - goff[a + 1]) * fy - oL) / cellW; }
+      for (let c = cs; c < ce; c++) {
+        const t = c + 0.5 - x0, u = uL + du * t, v = vL + dv * t;
+        if (!(u >= 0 && v >= 0 && u < W && v < H)) continue;
+        const o = (rowOut + c) * outSpp;
+        let done = false;
+        if (!nearestOnly) {
+          const fxp = u - 0.5 - u0, fyp = v - 0.5 - v0;
+          let xa = Math.floor(fxp), ya = Math.floor(fyp);
+          const wx = fxp - xa, wy = fyp - ya;
+          let xb = xa + 1, yb = ya + 1;
+          if (xa < 0) xa = 0; if (xb < 0) xb = 0; if (xa > ww - 1) xa = ww - 1; if (xb > ww - 1) xb = ww - 1;
+          if (ya < 0) ya = 0; if (yb < 0) yb = 0; if (ya > wh - 1) ya = wh - 1; if (yb > wh - 1) yb = wh - 1;
+          const i00 = ya * ww + xa, i10 = ya * ww + xb, i01 = yb * ww + xa, i11 = yb * ww + xb;
+          const s00 = i00 * spp, s10 = i10 * spp, s01 = i01 * spp, s11 = i11 * spp;
+          if (hasAlpha ? (data[s00 + alphaIdx] !== 0 && data[s10 + alphaIdx] !== 0 && data[s01 + alphaIdx] !== 0 && data[s11 + alphaIdx] !== 0)
+            : (!needValid || (valid(i00) && valid(i10) && valid(i01) && valid(i11)))) {
+            const w00 = (1 - wx) * (1 - wy), w10 = wx * (1 - wy), w01 = (1 - wx) * wy, w11 = wx * wy;
+            if (fastRound) for (let ch = 0; ch < spp; ch++) out[o + ch] = (data[s00 + ch] * w00 + data[s10 + ch] * w10 + data[s01 + ch] * w01 + data[s11 + ch] * w11 + 0.5) | 0;
+            else if (isFloat) for (let ch = 0; ch < spp; ch++) out[o + ch] = data[s00 + ch] * w00 + data[s10 + ch] * w10 + data[s01 + ch] * w01 + data[s11 + ch] * w11;
+            else for (let ch = 0; ch < spp; ch++) out[o + ch] = Math.round(data[s00 + ch] * w00 + data[s10 + ch] * w10 + data[s01 + ch] * w01 + data[s11 + ch] * w11);
+            done = true;
+          }
+        }
+        if (!done) {
+          const ix = Math.floor(u) - u0, iy = Math.floor(v) - v0;
+          if (ix < 0 || iy < 0 || ix >= ww || iy >= wh) continue;
+          const si = iy * ww + ix;
+          if (needValid && !valid(si)) continue;
+          const so = si * spp;
+          for (let ch = 0; ch < spp; ch++) out[o + ch] = data[so + ch];
+        }
+        if (addAlpha) out[o + spp] = maxVal;
+        if (applyZ) out[o] -= oL + dO * t;
+      }
+    }
+  }
+}
+async function processBand(ctx, img, b, blob) {
+  const { W, H, outSpp, T, tilesX, Hout, nx, ny, cellW, cellH, gu, gv } = ctx;
+  const Arr = arrCtor(ctx.bits, ctx.sf);
+  const ty0 = b * ctx.bandTileRows, nTy = Math.min(ctx.bandTileRows, ctx.tilesY - ty0);
+  const r0 = ty0 * T, r1 = Math.min(Hout, (ty0 + nTy) * T);
+  const bandW = tilesX * T, bandH = nTy * T;
+  const out = new Arr(bandW * bandH * outSpp);
+  if (ctx.fillValue !== 0) out.fill(ctx.fillValue);
+  let umin = Infinity, umax = -Infinity, vmin = Infinity, vmax = -Infinity;
+  const rows = [r0 + 0.5, r1 - 0.5];
+  for (let l = 0; l < ny; l++) { const gy = l * cellH; if (gy > r0 && gy < r1) rows.push(gy); }
+  for (const ry of rows) for (let k = 0; k < nx; k++) {
+    const u = gridInterp(gu, nx, ny, cellW, cellH, k * cellW, ry), v = gridInterp(gv, nx, ny, cellW, cellH, k * cellW, ry);
+    if (u < umin) umin = u; if (u > umax) umax = u; if (v < vmin) vmin = v; if (v > vmax) vmax = v;
+  }
+  const u0 = Math.max(0, Math.floor(umin) - 2), u1 = Math.min(W, Math.ceil(umax) + 2);
+  const v0 = Math.max(0, Math.floor(vmin) - 2), v1 = Math.min(H, Math.ceil(vmax) + 2);
+  if (u1 > u0 && v1 > v0) {
+    const data = await readWindow(ctx, img, blob, [u0, v0, u1, v1]);
+    if (ctx.isYCbCr) ycbcrToRgb(data);
+    resampleInto(ctx, data, u0, v0, u1 - u0, v1 - v0, out, r0, r1, bandW);
+  }
+  const tiles = [], tile = new Arr(T * T * outSpp);
+  for (let tyl = 0; tyl < nTy; tyl++) for (let tx = 0; tx < tilesX; tx++) {
+    for (let rr = 0; rr < T; rr++) {
+      const s = ((tyl * T + rr) * bandW + tx * T) * outSpp;
+      tile.set(out.subarray(s, s + T * outSpp), rr * T * outSpp);
+    }
+    if (ctx.predictor === 2) hPredict(tile, T, T, outSpp);
+    tiles.push(await deflateBytes(new Uint8Array(tile.buffer))); // egy szálon belül sorban gyorsabb, mint párhuzamosan
+  }
+  return tiles;
+}
+const GEOTIFF_URL = 'https://cdn.jsdelivr.net/npm/geotiff@2.1.3/dist-browser/geotiff.js';
+function makeRasterWorker() {
+  const src = `importScripts(${JSON.stringify(GEOTIFF_URL)});\n'use strict';\n` +
+    [arrCtor, gridInterp, ycbcrToRgb, hPredict, deflateBytes, inflateBytes, lzwDecode, readWindow, resampleInto, processBand].map(f => f.toString()).join('\n') + `
+let img = null, ctx = null, file = null;
+onmessage = async (e) => {
+  const m = e.data;
+  try {
+    if (m.type === 'init') { ctx = m.ctx; file = m.file; img = await (await GeoTIFF.fromBlob(file)).getImage(0); postMessage({ type: 'ready' }); }
+    else if (m.type === 'band') { const tiles = await processBand(ctx, img, m.band, file); postMessage({ type: 'band', band: m.band, tiles }, tiles.map(t => t.buffer)); }
+  } catch (err) { postMessage({ type: 'error', init: m.type === 'init', message: String((err && err.message) || err) }); }
+};`;
+  return new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+}
+async function runBands(nBands, ctx, file, onBand, signal) {
+  let nW = Math.max(1, Math.min(6, (navigator.hardwareConcurrency || 2) - 1, nBands));
+  if (navigator.deviceMemory && navigator.deviceMemory <= 4) nW = Math.min(nW, 2); // kevés memóriánál óvatosan
+  let workers = [];
+  try { for (let i = 0; i < nW; i++) workers.push(makeRasterWorker()); } catch (e) { workers.forEach(w => w.terminate()); workers = []; }
+  let started = 0;
+  if (workers.length) {
+    try {
+      await new Promise((resolve, reject) => {
+        let next = 0, done = 0, failed = false;
+        const fail = e => { if (!failed) { failed = true; reject(e); } };
+        if (signal) signal.addEventListener('abort', () => fail(abortErr()), { once: true });
+        const assign = w => {
+          if (failed) return;
+          if (signal && signal.aborted) return fail(abortErr());
+          if (next < nBands) { started++; w.postMessage({ type: 'band', band: next++ }); }
+        };
+        for (const w of workers) {
+          w.onmessage = e => {
+            const m = e.data;
+            if (m.type === 'ready') assign(w);
+            else if (m.type === 'band') { onBand(m.band, m.tiles); if (++done === nBands) resolve(); else assign(w); }
+            else fail(Object.assign(new Error(m.message), { init: m.init }));
+          };
+          w.onerror = ev => { ev.preventDefault(); fail(Object.assign(new Error('Worker hiba: ' + (ev.message || 'ismeretlen')), { init: true })); };
+          w.postMessage({ type: 'init', file, ctx });
+        }
+      });
+      return;
+    } catch (e) {
+      if (!(e.init && started === 0)) throw e;
+      console.warn('Web Worker nem indult, feldolgozás a fő szálon:', e);
+    } finally { workers.forEach(w => w.terminate()); }
+  }
+  const img = await (await GeoTIFF.fromBlob(file)).getImage(0);
+  for (let b = 0; b < nBands; b++) {
+    if (signal && signal.aborted) throw abortErr();
+    onBand(b, await processBand(ctx, img, b, file));
+  }
+}
+
+async function warpGeoTiff(job, srcKey, dstKey, opt, cb) {
+  const img = job.img, fd = img.fileDirectory, signal = cb.signal;
+  const W = img.getWidth(), H = img.getHeight(), spp = img.getSamplesPerPixel();
+  const bpsArr = Array.from(fd.BitsPerSample || [8]), bits = bpsArr[0];
+  const sf = fd.SampleFormat ? fd.SampleFormat[0] : 1;
+  if (bpsArr.some(x => x !== bits) || !arrCtor(bits, sf)) throw new Error(`Nem támogatott mintatípus (${bpsArr.join(',')} bit)`);
+  const pmi = fd.PhotometricInterpretation ?? 1;
+  if (![0, 1, 2, 3, 5, 6].includes(pmi)) throw new Error('Nem támogatott színmodell (PhotometricInterpretation = ' + pmi + ')');
+  const isYCbCr = pmi === 6, isPalette = pmi === 3, isFloat = sf === 3;
+  if (isYCbCr && (spp !== 3 || bits !== 8)) throw new Error('Nem támogatott YCbCr raszter');
+  if (fd.PlanarConfiguration === 2 && isYCbCr) throw new Error('Nem támogatott YCbCr elrendezés');
+  const baseCount = (pmi === 2 || pmi === 6) ? 3 : pmi === 5 ? 4 : 1;
+  const srcExtra = fd.ExtraSamples ? Array.from(fd.ExtraSamples) : [];
+  let alphaIdx = -1;
+  for (let k = 0; k < spp - baseCount; k++) { const v = srcExtra[k] || 0; if ((v === 1 || v === 2) && alphaIdx < 0) alphaIdx = baseCount + k; }
+  const nodata = fd.GDAL_NODATA !== undefined ? img.getGDALNoData() : null;
+  let outSpp = spp, addAlpha = false, outNodataStr = fd.GDAL_NODATA ? String(fd.GDAL_NODATA).replace(/\0+$/, '').trim() : null, fillValue = 0;
+  if (alphaIdx < 0 && nodata === null) {
+    if (isFloat) { outNodataStr = 'nan'; fillValue = NaN; }
+    else if (isPalette) outNodataStr = '0';
+    else { addAlpha = true; outSpp = spp + 1; }
+  } else if (alphaIdx < 0 && nodata !== null) fillValue = nodata;
+  const dataBands = spp - (alphaIdx >= 0 ? 1 : 0);
+  const wantZ = !!(opt.convertZ && dataBands === 1 && isFloat);
+  const A = srcAffine(img);
+
+  // 1) a raszter körvonala a cél KR-ben → kimeneti kiterjedés és pixelméret
+  cb.progress(0.01, 'Befoglaló számítása (EHT2)…');
+  const K = 24, edge = [];
+  for (let t = 0; t < K; t++) { const s = t / K; edge.push([s * W, 0], [W, s * H], [W - s * W, H], [0, H - s * H]); }
+  const cu = W / 2, cv = H / 2, du = Math.max(1, W / 8), dv = Math.max(1, H / 8);
+  edge.push([cu, cv], [cu + du, cv], [cu, cv + dv]);
+  const exy = new Float64Array(edge.length * 2);
+  edge.forEach(([u, v], i) => { exy[2 * i] = A.a * u + A.b * v + A.c; exy[2 * i + 1] = A.d * u + A.e * v + A.f; });
+  const fr = await transformXY(srcKey, dstKey, exy, null, { signal });
+  const nE = edge.length, edgeBad = fr.bad;
+  if (edgeBad && !fillOutsideCoverage(srcKey, dstKey, exy, fr.xy)) throw badPointsError(fr, nE);
+  let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+  for (let i = 0; i < nE - 3; i++) {
+    const x = fr.xy[2 * i], y = fr.xy[2 * i + 1];
+    if (x < minx) minx = x; if (x > maxx) maxx = x; if (y < miny) miny = y; if (y > maxy) maxy = y;
+  }
+  const P = i => [fr.xy[2 * (nE - 3 + i)], fr.xy[2 * (nE - 3 + i) + 1]];
+  const [p0, p1, p2] = [P(0), P(1), P(2)];
+  const [mx, my] = metersPerUnit(dstKey, p0[1]);
+  const ax = (p1[0] - p0[0]) * mx / du, ay = (p1[1] - p0[1]) * my / du, bx = (p2[0] - p0[0]) * mx / dv, by = (p2[1] - p0[1]) * my / dv;
+  let resM = Math.sqrt(Math.abs(ax * by - ay * bx));
+  resM = opt.pixelSize > 0 ? opt.pixelSize : Number(resM.toPrecision(3));
+  const resX = resM / mx, resY = resM / my;
+  const X0 = Math.floor(minx / resX) * resX, Y1 = Math.ceil(maxy / resY) * resY;
+  const Wout = Math.max(1, Math.round((Math.ceil(maxx / resX) * resX - X0) / resX));
+  const Hout = Math.max(1, Math.round((Y1 - Math.floor(miny / resY) * resY) / resY));
+  if (Wout * Hout > 4e9) throw new Error(`A kimenet túl nagy lenne (${fmtInt(Wout)} × ${fmtInt(Hout)} px) – adj meg nagyobb pixelméretet`);
+
+  // 2) rácspontok: cél → forrás (EHT2), ebből interpolálunk minden pixelre
+  const nx = Math.min(129, Math.max(3, Math.ceil(Wout * resM / 50) + 1)), ny = Math.min(129, Math.max(3, Math.ceil(Hout * resM / 50) + 1));
+  const cellW = Wout / (nx - 1), cellH = Hout / (ny - 1), nn = nx * ny;
+  const gxy = new Float64Array(2 * nn), gpx = new Float64Array(nn), gpy = new Float64Array(nn);
+  for (let l = 0; l < ny; l++) for (let k = 0; k < nx; k++) {
+    const i = l * nx + k;
+    gpx[i] = k * cellW; gpy[i] = l * cellH;
+    gxy[2 * i] = X0 + gpx[i] * resX; gxy[2 * i + 1] = Y1 - gpy[i] * resY;
+  }
+  cb.progress(0.03, `Rácspontok számítása (EHT2, ${fmtInt(nn)} pont)…`);
+  const gr = await transformXY(dstKey, srcKey, gxy, wantZ ? new Float64Array(nn) : null, { convertZ: wantZ, signal, compare: false });
+  if (gr.bad && !fillOutsideCoverage(dstKey, srcKey, gxy, gr.xy)) throw badPointsError(gr, nn);
+  const gu = new Float64Array(nn), gv = new Float64Array(nn), goff = wantZ ? new Float64Array(nn) : null;
+  let offMean = 0, offN = 0;
+  for (let i = 0; i < nn; i++) {
+    const x = gr.xy[2 * i] - A.c, y = gr.xy[2 * i + 1] - A.f;
+    gu[i] = (A.e * x - A.b * y) / A.det; gv[i] = (-A.d * x + A.a * y) / A.det;
+    if (goff && Number.isFinite(gr.h[i])) { goff[i] = gr.h[i]; offMean += gr.h[i]; offN++; }
+  }
+  if (goff) for (let i = 0; i < nn; i++) if (!Number.isFinite(gr.h[i])) goff[i] = offN ? offMean / offN : 0;
+
+  // 3) sávonkénti feldolgozás (Web Workerekben)
+  const T = 256, tilesX = Math.ceil(Wout / T), tilesY = Math.ceil(Hout / T), bytesPer = bits / 8;
+  const bandTileRows = Math.max(1, Math.min(16, Math.floor(48e6 / (tilesX * T * T * outSpp * bytesPer))));
+  const nBands = Math.ceil(tilesY / bandTileRows);
+  const predictor = !isFloat && (bits === 8 || bits === 16) ? 2 : 1;
+  const ctx = {
+    W, H, spp, outSpp, bits, sf, isFloat, isYCbCr, isPalette, alphaIdx, nodata, addAlpha, fillValue,
+    maxVal: isFloat ? 1 : sf === 2 ? 2 ** (bits - 1) - 1 : 2 ** bits - 1,
+    Wout, Hout, T, tilesX, tilesY, bandTileRows, nx, ny, cellW, cellH, gu, gv, goff,
+    resample: opt.resample, predictor,
+  };
+  const rawOut = Wout * Hout * outSpp * bytesPer;
+  const bandBlobs = new Array(nBands), bandSizes = new Array(nBands);
+  let doneB = 0;
+  cb.progress(0.05, `Átmintavételezés: ${fmtInt(Wout)} × ${fmtInt(Hout)} px (${fmtBytes(rawOut)} tömörítetlen)…`);
+  await runBands(nBands, ctx, job.blob, (b, tiles) => {
+    bandBlobs[b] = new Blob(tiles);
+    bandSizes[b] = tiles.map(t => t.length);
+    doneB++;
+    cb.progress(0.05 + 0.93 * doneB / nBands, `Átmintavételezés: ${Math.round(100 * doneB / nBands)}% (${fmtInt(Wout)} × ${fmtInt(Hout)} px)`);
+  }, signal);
+
+  // 4) TIFF összeállítása: fejléc + csempék + IFD
+  const sizes = bandSizes.flat();
+  const total = sizes.reduce((s, x) => s + x, 0);
+  const big = 16 + total + sizes.length * 16 + 65536 > 0xFFFFFFFF;
+  const start = big ? 16 : 8, offsets = new Array(sizes.length);
+  let acc = start;
+  for (let i = 0; i < sizes.length; i++) { offsets[i] = acc; acc += sizes[i]; }
+  const pad = (8 - acc % 8) % 8, ifdOff = acc + pad;
+  const extraOut = [];
+  for (let k = 0; k < outSpp - baseCount; k++) extraOut.push(k < spp - baseCount ? (srcExtra[k] || 0) : 2);
+  const entries = [
+    { tag: 256, type: 4, value: [Wout] }, { tag: 257, type: 4, value: [Hout] },
+    { tag: 258, type: 3, value: new Array(outSpp).fill(bits) }, { tag: 259, type: 3, value: [8] },
+    { tag: 262, type: 3, value: [isYCbCr ? 2 : pmi] }, { tag: 277, type: 3, value: [outSpp] },
+    { tag: 284, type: 3, value: [1] }, { tag: 317, type: 3, value: [predictor] },
+    { tag: 322, type: 3, value: [T] }, { tag: 323, type: 3, value: [T] },
+    { tag: 324, type: big ? 16 : 4, value: offsets }, { tag: 325, type: big ? 16 : 4, value: sizes },
+    { tag: 339, type: 3, value: new Array(outSpp).fill(sf) },
+    { tag: 33550, type: 12, value: [resX, resY, 0] }, { tag: 33922, type: 12, value: [0, 0, 0, X0, Y1, 0] },
+    ...geoKeyEntries(dstKey),
+  ];
+  if (extraOut.length) entries.push({ tag: 338, type: 3, value: extraOut });
+  if (isPalette && fd.ColorMap) entries.push({ tag: 320, type: 3, value: Array.from(fd.ColorMap) });
+  if (fd.GDAL_METADATA) entries.push({ tag: 42112, type: 2, value: String(fd.GDAL_METADATA).replace(/\0+$/, '').replace(/\s*<Item name="STATISTICS_[^"]*"[^>]*>[^<]*<\/Item>/g, '') });
+  if (outNodataStr !== null) entries.push({ tag: 42113, type: 2, value: outNodataStr });
+  const ifd = buildIfd(entries, ifdOff, big, true, 0);
+  const blob = new Blob([tiffHeader(big, true, ifdOff), ...bandBlobs, new Uint8Array(pad), ifd], { type: 'image/tiff' });
+  const r = fr;
+  r.warp = { Wout, Hout, resM, nodes: nn, badNodes: gr.bad, edgeBad, wantZ, zSkipped: !!opt.convertZ && !wantZ, outSpp, addAlpha };
+  return { blob, r };
+}
+
+/* =====================================================================
+ *  Fájlok betöltése, feladatok (job-ok)
+ * ===================================================================== */
+const SHP_PARTS = new Set(['shp', 'shx', 'dbf', 'prj', 'cpg', 'qpj', 'sbn', 'sbx', 'qix']);
+const KNOWN_EXT = new Set([...SHP_PARTS, 'kml', 'kmz', 'geojson', 'json', 'tif', 'tiff']);
+const jobs = [];
+let jobSeq = 0;
+
+async function expandInputs(fileList) {
+  const out = [], skipped = [];
+  for (const f of fileList) {
+    const ext = extOf(f.name);
+    if (ext === 'zip') {
+      const zip = await JSZip.loadAsync(f);
+      const entries = [];
+      zip.forEach((p, e) => { if (!e.dir && !/(^|\/)(__MACOSX\/|\._)/.test(p)) entries.push([p, e]); });
+      for (const [p, e] of entries) {
+        const ex = extOf(p);
+        if (KNOWN_EXT.has(ex)) out.push({ path: f.name + '/' + p, name: p.split('/').pop(), blob: await e.async('blob') });
+        else if (!/\.(xml|txt|html?|pdf|aux|ovr|tfw|jgw|pgw)$/i.test(p)) skipped.push(p);
+      }
+    } else if (KNOWN_EXT.has(ext)) out.push({ path: f.name, name: f.name, blob: f });
+    else skipped.push(f.name);
+  }
+  return { items: out, skipped };
+}
+function groupInputs(items) {
+  const res = [], shp = new Map();
+  for (const it of items) {
+    const ext = extOf(it.name);
+    if (SHP_PARTS.has(ext)) {
+      const key = it.path.replace(/\.[^.\/]+$/, '').toLowerCase();
+      if (!shp.has(key)) shp.set(key, { base: baseOf(it.name), parts: {} });
+      shp.get(key).parts[ext] = it;
+    } else if (ext === 'kml' || ext === 'kmz') res.push({ type: 'kml', ext, name: it.name, base: baseOf(it.name), blob: it.blob });
+    else if (ext === 'geojson' || ext === 'json') res.push({ type: 'geojson', ext, name: it.name, base: baseOf(it.name), blob: it.blob });
+    else if (ext === 'tif' || ext === 'tiff') res.push({ type: 'tiff', ext, name: it.name, base: baseOf(it.name), blob: it.blob });
+  }
+  for (const g of shp.values()) {
+    if (g.parts.shp) res.push({ type: 'shp', ext: 'shp', name: g.base + '.shp', base: g.base, parts: g.parts });
+    else res.push({ type: 'shp', ext: 'shp', name: g.base + '.*', base: g.base, parts: g.parts, error: 'Hiányzik a .shp fájl (a .shp, .shx, .dbf, .prj fájlokat egyszerre jelöld ki, vagy tömörítsd ZIP-be)' });
+  }
+  return res;
+}
+async function probeJob(job) {
+  if (job.error) return;
+  try {
+    if (job.type === 'shp') {
+      job.shpBuf = await job.parts.shp.blob.arrayBuffer();
+      const recs = walkShp(job.shpBuf), t = new DataView(job.shpBuf).getInt32(32, true);
+      const prj = job.parts.prj ? await job.parts.prj.blob.text() : null;
+      const fromPrj = crsFromWkt(prj);
+      job.detected = fromPrj || crsFromBBox(shpHeaderBBox(job.shpBuf));
+      job.detectNote = fromPrj ? '.prj alapján' : prj ? 'a .prj nem ismert, a koordináták alapján' : 'nincs .prj, a koordináták alapján';
+      job.info = `Shapefile · ${SHP_TYPES[t] || 'típus ' + t} · ${fmtInt(recs.length)} rekord · ${fmtInt(recs.reduce((s, r) => s + r.nPts, 0))} pont` + (job.parts.dbf ? '' : ' · nincs .dbf');
+    } else if (job.type === 'kml') {
+      const layers = readKml(await kmlTextOf(job), job.base), feats = layers[0].features;
+      const fromBox = crsFromBBox(featuresBBox(feats));
+      job.detected = fromBox === 'EPSG:23700' ? 'EPSG:23700' : 'EPSG:4326';
+      job.detectNote = fromBox === 'EPSG:23700' ? 'EOV koordináták a KML-ben' : 'a KML mindig WGS84';
+      job.info = `${job.ext.toUpperCase()} · ${fmtInt(feats.length)} elem · ${fmtInt(countPositions(feats))} pont`;
+    } else if (job.type === 'geojson') {
+      const obj = JSON.parse(await job.blob.text()), feats = geojsonFeatureRefs(obj);
+      job.detected = crsFromGeoJson(obj, feats);
+      job.detectNote = obj.crs ? '„crs” mező alapján' : 'a koordináták alapján';
+      job.info = `GeoJSON · ${fmtInt(feats.length)} elem · ${fmtInt(countPositions(feats))} pont`;
+    } else if (job.type === 'tiff') {
+      job.img = await (await GeoTIFF.fromBlob(job.blob)).getImage(0);
+      const fd = job.img.fileDirectory, bps = fd.BitsPerSample ? fd.BitsPerSample[0] : 8;
+      job.detected = crsFromGeoKeys(job.img.getGeoKeys());
+      job.detectNote = 'GeoTIFF kulcsok alapján';
+      job.info = `GeoTIFF · ${fmtInt(job.img.getWidth())} × ${fmtInt(job.img.getHeight())} px · ${job.img.getSamplesPerPixel()} sáv · ` +
+        `${sampleTypeName(bps, fd.SampleFormat ? fd.SampleFormat[0] : 1)} · ${TIFF_COMPRESSION[fd.Compression] || 'tömörítés ' + fd.Compression} · ${fmtBytes(job.blob.size)}`;
+      if (!fd.ModelTiepoint && !fd.ModelTransformation) job.error = 'A GeoTIFF nem tartalmaz georeferálást';
+      if (fd.ModelPixelScale && fd.ModelTiepoint) {
+        const s = fd.ModelPixelScale, isGeo = job.detected && CRS[job.detected].kind === 'geo';
+        job.info += ' · pixel ' + fmtLen(isGeo ? s[0] * 111320 * Math.cos(fd.ModelTiepoint[4] * Math.PI / 180) : s[0]);
+      }
+    }
+  } catch (e) { job.error = e.message || String(e); }
+}
+const dstOptions = srcKey => !srcKey ? [] : CRS[srcKey].kind === 'eov' ? DST_FOR_EOV : ['EPSG:23700'];
+function fmtOptions(job) {
+  if (job.type === 'tiff') return [['tiff', 'GeoTIFF']];
+  const d = CRS[job.dst];
+  if (!d) return [];
+  return (d.kind === 'geo' ? [['kml', 'KML']] : []).concat([['shp', 'Shapefile (ZIP)'], ['geojson', 'GeoJSON']]);
+}
+function defaultFmt(job) {
+  const o = fmtOptions(job).map(x => x[0]), same = job.type === 'kml' ? 'kml' : job.type;
+  return o.includes(same) ? same : (o[0] || '');
+}
+function setSrc(job, srcKey) {
+  job.src = srcKey || '';
+  const d = dstOptions(job.src);
+  if (!d.includes(job.dst)) job.dst = d[0] || '';
+  const f = fmtOptions(job).map(x => x[0]);
+  if (!f.includes(job.outFmt)) job.outFmt = defaultFmt(job);
+}
+
+async function loadFiles(fileList) {
+  const { items, skipped } = await expandInputs(Array.from(fileList));
+  const added = groupInputs(items);
+  for (const j of added) {
+    j.id = ++jobSeq;
+    await probeJob(j);
+    setSrc(j, j.detected);
+    jobs.push(j);
+    if (typeof renderJob === 'function') renderJob(j);
+  }
+  if (skipped.length && typeof flash === 'function') flash(`Kihagyott fájlok (nem támogatott formátum): ${skipped.slice(0, 8).join(', ')}${skipped.length > 8 ? '…' : ''}`);
+  return added;
+}
+
+const S = { convertZ: false, dbfEnc: 'utf-8', rmode: 'warp', resample: 'bilinear', pixelSize: 0 };
+
+async function convertJob(job, cb) {
+  const srcKey = job.src, dstKey = job.dst, fmt = job.outFmt;
+  if (!CRS[srcKey] || !CRS[dstKey]) throw new Error('Válaszd ki a forrás és a cél koordináta-rendszert');
+  const outBase = `${job.base}_${CRS[dstKey].tag}`;
+  const opt = { convertZ: S.convertZ, signal: cb.signal, onProgress: (d, t) => cb.progress(0.05 + 0.85 * d / t, `EHT2: ${fmtInt(d)} / ${fmtInt(t)} pont`) };
+  let files, r;
+  cb.progress(0.02, 'Beolvasás…');
+  if (job.type === 'tiff') {
+    const res = S.rmode === 'georef' ? await georefOnlyTiff(job, srcKey, dstKey, cb)
+      : await warpGeoTiff(job, srcKey, dstKey, { convertZ: S.convertZ, resample: S.resample, pixelSize: S.pixelSize }, cb);
+    files = [{ name: outBase + '.tif', data: res.blob }];
+    r = res.r;
+  } else if (job.type === 'shp' && fmt === 'shp') {
+    ({ files, r } = await rewriteShpFiles(job, srcKey, dstKey, outBase, opt));
+  } else if (job.type === 'geojson' && fmt === 'geojson') {
+    const obj = JSON.parse(await job.blob.text()), feats = geojsonFeatureRefs(obj);
+    r = await transformFeatures(feats, srcKey, dstKey, opt);
+    roundFeatures(feats, dstKey);
+    setGeoJsonCrs(obj, dstKey);
+    stripBBox(obj);
+    files = [{ name: outBase + '.geojson', data: JSON.stringify(obj) }];
+  } else if (job.type === 'kml' && fmt === 'kml') {
+    const res = await rewriteKmlCoords(await kmlTextOf(job), srcKey, dstKey, opt);
+    files = [{ name: outBase + '.kml', data: res.text }];
+    r = res.r;
+  } else {
+    let layers;
+    if (job.type === 'kml') layers = readKml(await kmlTextOf(job), job.base);
+    else if (job.type === 'shp') layers = await readShpLayers(job);
+    else { const obj = JSON.parse(await job.blob.text()); layers = [{ name: job.base, features: geojsonFeatureRefs(obj).map(f => ({ type: 'Feature', properties: f.properties || {}, geometry: f.geometry })) }]; }
+    r = await transformFeatures(layers.flatMap(l => l.features), srcKey, dstKey, opt);
+    if (fmt === 'kml') files = [{ name: outBase + '.kml', data: writeKml(layers, job.base) }];
+    else if (fmt === 'geojson') files = [{ name: outBase + '.geojson', data: writeGeoJson(layers, dstKey, job.base) }];
+    else files = writeShpFiles(layers, dstKey, outBase, S.dbfEnc);
+  }
+  job.result = { files, r, outBase };
+  return job.result;
+}
+const MIME = { kml: 'application/vnd.google-earth.kml+xml', geojson: 'application/geo+json', tif: 'image/tiff', zip: 'application/zip' };
+const toBlob = (data, name) => data instanceof Blob ? data : new Blob([data], { type: MIME[extOf(name)] || 'application/octet-stream' });
+async function resultBlob(res) {
+  if (res.files.length === 1) return { blob: toBlob(res.files[0].data, res.files[0].name), name: res.files[0].name };
+  const zip = new JSZip();
+  for (const f of res.files) zip.file(f.name, toBlob(f.data, f.name));
+  return { blob: await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' }), name: res.outBase + '.zip' };
+}
+
+/* =====================================================================
+ *  Felület
+ * ===================================================================== */
+function readSettings() {
+  S.convertZ = $('#optZ').checked;
+  S.dbfEnc = $('#optEnc').value;
+  S.rmode = $('#optRMode').value;
+  S.resample = $('#optResample').value;
+  S.pixelSize = parseFloat(String($('#optPix').value).replace(',', '.')) || 0;
+}
+function flash(msg) {
+  const el = h('div', { class: 'note warn small' }, msg);
+  $('#jobs').before(el);
+  setTimeout(() => el.remove(), 12000);
+}
+function updateGlobalButtons() {
+  $('#empty').style.display = jobs.length ? 'none' : '';
+  $('#runAll').disabled = !jobs.some(j => !j.error && j.src && j.dst && !j.busy);
+  $('#dlAll').disabled = !jobs.some(j => j.result);
+  $('#clearAll').disabled = !jobs.length || jobs.some(j => j.busy);
+}
+function fillSelect(sel, opts, value, placeholder) {
+  sel.replaceChildren();
+  if (placeholder) sel.append(h('option', { value: '' }, placeholder));
+  for (const [v, label] of opts) sel.append(h('option', { value: v, selected: v === value }, label));
+  if (!opts.some(o => o[0] === value)) sel.value = '';
+}
+function statsText(job) {
+  const r = job.result && job.result.r;
+  if (!r) return null;
+  const parts = [];
+  if (r.points) parts.push(h('span', null, h('b', null, fmtInt(r.points)), ' pont (', fmtInt(r.unique), ' egyedi), ', fmtInt(r.requests), ' EHT2 kérés'));
+  if (r.approx) parts.push(h('span', { class: 'warn' }, `${fmtInt(r.approx)} pont kívül esik az EHT2 lefedettségén (Magyarország) – ezeknél közelítő átszámítás (egyszerű átszámítás + a legközelebbi pont javítása).`));
+  if (r.warp) {
+    const w = r.warp;
+    parts.push(h('span', null, 'Kimenet: ', h('b', null, `${fmtInt(w.Wout)} × ${fmtInt(w.Hout)} px`), `, pixel ${fmtLen(w.resM)}, ${fmtInt(w.nodes)} rácspont` +
+      (w.addAlpha ? ', átlátszósági sáv hozzáadva' : '')));
+    if (w.badNodes || w.edgeBad) parts.push(h('span', { class: 'warn' }, `A raszter egy része kívül esik az EHT2 lefedettségén (${fmtInt(w.badNodes)} / ${fmtInt(w.nodes)} rácspont). Ott a pozíció csak közelítő (egyszerű átszámítás + átlagos javítás).`));
+    if (w.wantZ) parts.push(h('span', null, 'Magasságok átszámítva (ellipszoidi ⇄ Balti).'));
+    if (w.zSkipped) parts.push(h('span', { class: 'warn' }, 'Magasság-átszámítás csak egysávos lebegőpontos (DSM) raszternél lehetséges – itt kimaradt.'));
+  }
+  if (r.georef) {
+    const g = r.georef, px = g.maxRes / g.pixM;
+    parts.push(h('span', { class: px > 0.5 ? 'warn' : null }, 'Affin illesztés maradék hibája: ', h('b', null, fmtLen(g.maxRes)), ` (${fmtDec(px, 2)} px), elforgatás ${fmtDec(g.rot, 3)}°` +
+      (px > 0.5 ? ' – túl nagy, inkább használd az átmintavételezést!' : '')));
+    if (g.outside) parts.push(h('span', { class: 'warn' }, `${g.outside} / ${g.total} illesztőpont kívül esik az EHT2 lefedettségén – ott közelítés.`));
+  }
+  if (r.diff) parts.push(h('span', null, 'Az egyszerű (towgs84) átszámítás ehhez képest átlagosan ', h('b', null, fmtLen(r.diff.mean)), ', legfeljebb ', h('b', null, fmtLen(r.diff.max)), ' hibát adna.'));
+  return h('div', null, ...parts.flatMap((p, i) => i ? [h('br'), p] : [p]));
+}
+function renderJob(job) {
+  const el = {};
+  el.src = h('select', { onchange: () => { setSrc(job, el.src.value); refresh(); } });
+  el.dst = h('select', { onchange: () => { job.dst = el.dst.value; const f = fmtOptions(job).map(x => x[0]); if (!f.includes(job.outFmt)) job.outFmt = defaultFmt(job); refresh(); } });
+  el.fmt = h('select', { onchange: () => { job.outFmt = el.fmt.value; } });
+  el.run = h('button', { class: 'btn', onclick: () => runJob(job) }, 'Konvertálás');
+  el.cancel = h('button', { class: 'btn secondary', style: 'display:none', onclick: () => job.ctrl && job.ctrl.abort() }, 'Mégse');
+  el.dl = h('button', { class: 'btn secondary', style: 'display:none', onclick: async () => { const b = await resultBlob(job.result); downloadBlob(b.blob, b.name); } }, 'Letöltés');
+  el.status = h('span', { class: 'status' });
+  el.barIn = h('div');
+  el.bar = h('div', { class: 'bar' }, el.barIn);
+  el.stats = h('div', { class: 'stats' });
+  el.info = h('div', { class: 'info small muted' });
+  el.root = h('div', { class: 'job' },
+    h('div', { class: 'head' }, h('span', { class: 'badge' }, job.type === 'kml' ? job.ext : job.type === 'tiff' ? 'GeoTIFF' : job.type),
+      h('span', { class: 'fname' }, job.name),
+      h('button', { class: 'x', title: 'Eltávolítás', 'aria-label': 'Eltávolítás', onclick: () => { if (job.busy) return; jobs.splice(jobs.indexOf(job), 1); el.root.remove(); updateGlobalButtons(); } }, '×')),
+    el.info,
+    h('div', { class: 'row' }, h('label', null, 'Forrás', el.src), h('span', { class: 'muted' }, '→'), h('label', null, 'Cél', el.dst), h('label', null, 'Kimenet', el.fmt)),
+    h('div', { class: 'row' }, el.run, el.cancel, el.dl, el.status),
+    el.bar, el.stats);
+  job.el = el;
+  const refresh = job.refresh = () => {
+    const srcOpts = Object.values(CRS).map(c => [c.key, c.label + (c.key === job.detected ? ' – felismert' : '')]);
+    fillSelect(el.src, srcOpts, job.src, job.src ? null : '— válassz —');
+    fillSelect(el.dst, dstOptions(job.src).map(k => [k, CRS[k].label]), job.dst);
+    fillSelect(el.fmt, fmtOptions(job), job.outFmt);
+    el.fmt.disabled = job.type === 'tiff';
+    el.info.textContent = job.info || '';
+    if (job.detected) el.info.textContent += ` · forrás: ${CRS[job.detected].label} (${job.detectNote})`;
+    else if (!job.error && job.info) el.info.append(h('span', { class: 'warn' }, ' · a forrás koordináta-rendszert nem sikerült felismerni, válaszd ki!'));
+    if (job.error) { el.status.className = 'status err'; el.status.textContent = job.error; }
+    el.run.disabled = !!job.error || !job.src || !job.dst || !!job.busy;
+    el.src.disabled = el.dst.disabled = !!job.busy || !!job.error;
+    el.stats.replaceChildren(...[statsText(job)].filter(Boolean));
+    el.dl.style.display = job.result && !job.busy ? '' : 'none';
+    el.cancel.style.display = job.busy ? '' : 'none';
+    updateGlobalButtons();
+  };
+  $('#jobs').append(el.root);
+  refresh();
+}
+async function runJob(job) {
+  if (job.busy || job.error) return;
+  readSettings();
+  const el = job.el;
+  job.busy = true; job.result = null; job.ctrl = new AbortController();
+  el.status.className = 'status'; el.status.textContent = 'Indul…';
+  el.bar.classList.add('on'); el.barIn.style.width = '0%';
+  job.refresh();
+  const t0 = performance.now();
+  try {
+    await convertJob(job, {
+      signal: job.ctrl.signal,
+      progress: (f, txt) => { el.barIn.style.width = Math.round(100 * Math.min(1, f)) + '%'; if (txt) el.status.textContent = txt; },
+    });
+    const sz = job.result.files.reduce((s, f) => s + (f.data.size ?? f.data.byteLength ?? f.data.length ?? 0), 0);
+    el.status.className = 'status ok';
+    el.status.textContent = `Kész (${fmtDec((performance.now() - t0) / 1000, 1)} s, ${fmtBytes(sz)})`;
+    el.barIn.style.width = '100%';
+  } catch (e) {
+    console.error(e);
+    el.status.className = 'status err';
+    el.status.textContent = e.name === 'AbortError' ? 'Megszakítva' : 'Hiba: ' + (e.message || e);
+    job.result = null;
+  } finally {
+    job.busy = false; job.ctrl = null;
+    setTimeout(() => el.bar.classList.remove('on'), 800);
+    job.refresh();
+  }
+}
+
+/* ---- egy pont ellenőrzése ---- */
+function parsePoint(text) {
+  const t = String(text).trim();
+  let parts = t.split(/[\s;\t]+/).filter(Boolean);
+  if (parts.length === 1) parts = t.split(',');
+  const nums = parts.map(s => parseFloat(s.replace(',', '.'))).filter(Number.isFinite);
+  if (nums.length < 2) return null;
+  const [a, b] = nums, hgt = nums[2] || 0, hasH = nums.length > 2;
+  if (Math.abs(a) < 1000 && Math.abs(b) < 1000) {
+    if (a >= 40 && a <= 55 && b >= 10 && b <= 30) return { src: 'EPSG:4326', x: b, y: a, h: hgt, hasH };
+    if (b >= 40 && b <= 55 && a >= 10 && a <= 30) return { src: 'EPSG:4326', x: a, y: b, h: hgt, hasH };
+    return null;
+  }
+  if (a > 380000 && b < 380000) return { src: 'EPSG:23700', x: a, y: b, h: hgt, hasH };
+  if (b > 380000 && a < 380000) return { src: 'EPSG:23700', x: b, y: a, h: hgt, hasH };
+  return null;
+}
+async function checkPoint() {
+  const out = $('#ptOut'), p = parsePoint($('#ptIn').value);
+  if (!p) { out.textContent = 'Nem értelmezhető pont. Példák: „47.4979 19.0402” vagy „650683.12 239377.45”.'; return; }
+  out.textContent = 'Számolás…';
+  const toEov = p.src !== 'EPSG:23700', dst = toEov ? 'EPSG:23700' : 'EPSG:4326';
+  try {
+    const r = await transformXY(p.src, dst, new Float64Array([p.x, p.y]), new Float64Array([p.h]), { convertZ: true });
+    if (r.bad) throw new Error(r.lastErr || 'az EHT2 nem tudta átszámítani (Magyarországon kívül?)');
+    const naive = proj4(p.src, dst).forward([p.x, p.y]);
+    const X = r.xy[0], Y = r.xy[1];
+    const hIn = p.hasH ? `   ${toEov ? 'h' : 'H'} = ${p.h.toFixed(3)} m (${toEov ? 'ellipszoidi' : 'Balti'})` : '';
+    const hOut = p.hasH ? `   ${toEov ? 'H' : 'h'} = ${r.z[0].toFixed(3)} m (${toEov ? 'Balti' : 'ellipszoidi'})` : '';
+    let lines;
+    if (toEov) {
+      lines = [`Bemenet (WGS84/ETRS89):  φ = ${p.y.toFixed(9)}°   λ = ${p.x.toFixed(9)}°${hIn}`,
+        `EHT2 → EOV:              Y = ${X.toFixed(3)}   X = ${Y.toFixed(3)}${hOut}`,
+        `Egyszerű (towgs84):      Y = ${naive[0].toFixed(3)}   X = ${naive[1].toFixed(3)}`];
+    } else {
+      lines = [`Bemenet (EOV):           Y = ${p.x.toFixed(3)}   X = ${p.y.toFixed(3)}${hIn}`,
+        `EHT2 → WGS84/ETRS89:     φ = ${Y.toFixed(9)}°   λ = ${X.toFixed(9)}°${hOut}`,
+        `Egyszerű (towgs84):      φ = ${naive[1].toFixed(9)}°   λ = ${naive[0].toFixed(9)}°`];
+    }
+    lines.push(`Eltérés az egyszerű átszámítástól: ${fmtLen(r.diff ? r.diff.max : NaN)}`);
+    if (!p.hasH) lines.push('(Magasság-átszámításhoz add meg harmadik értékként a magasságot.)');
+    out.textContent = lines.join('\n');
+    const lat = toEov ? p.y : Y, lon = toEov ? p.x : X;
+    out.append('\n', h('a', { href: `https://www.google.com/maps?q=${lat.toFixed(8)},${lon.toFixed(8)}`, target: '_blank', rel: 'noopener' }, 'Megnyitás a Google Térképen'));
+  } catch (e) { out.textContent = 'Hiba: ' + (e.message || e); }
+}
+
+/* ---- események ---- */
+(function initUi() {
+  const drop = $('#drop'), input = $('#fileInput');
+  const add = async files => {
+    if (!files || !files.length) return;
+    try { await loadFiles(files); } catch (e) { flash('Hiba a betöltéskor: ' + (e.message || e)); }
+    updateGlobalButtons();
+  };
+  input.addEventListener('change', () => { add(input.files).then(() => { input.value = ''; }); });
+  ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', e => add(e.dataTransfer.files));
+  $('#runAll').addEventListener('click', async () => { for (const j of jobs.slice()) if (!j.error && j.src && j.dst && !j.busy) await runJob(j); });
+  $('#dlAll').addEventListener('click', async () => {
+    const done = jobs.filter(j => j.result);
+    if (done.length === 1) { const b = await resultBlob(done[0].result); downloadBlob(b.blob, b.name); return; }
+    const zip = new JSZip(), names = new Set();
+    for (const j of done) for (const f of j.result.files) {
+      let n = f.name, i = 2;
+      while (names.has(n)) n = f.name.replace(/(\.[^.]+)$/, `_${i++}$1`);
+      names.add(n); zip.file(n, toBlob(f.data, f.name));
+    }
+    downloadBlob(await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' }), 'atszamitott_fajlok.zip');
+  });
+  $('#clearAll').addEventListener('click', () => { if (jobs.some(j => j.busy)) return; jobs.length = 0; $('#jobs').replaceChildren(); updateGlobalButtons(); });
+  $('#ptBtn').addEventListener('click', checkPoint);
+  $('#ptIn').addEventListener('keydown', e => { if (e.key === 'Enter') checkPoint(); });
+  updateGlobalButtons();
+})();
+
+// tesztekhez / konzolból
+window.EOVKonv = { CRS, EHT, S, jobs, transformXY, loadFiles, convertJob, resultBlob, readKml, writeKml, readDbf, writeDbf, walkShp, parsePoint };
+</script>
+</body>
+</html>
