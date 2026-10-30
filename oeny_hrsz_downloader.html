@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>OENY HRSZ shape-zip letöltő – Userscript</title>
-  <meta name="description" content="OENY HRSZ kereső shape-zip letöltő userscript. Mivel az OENY letiltotta a közvetlen WFS hozzáférést, ez a script kiszedi a BBOX-ot a térkép hálózati kéréseiből." />
+  <meta name="description" content="OENY HRSZ kereső shape-zip letöltő userscript. Mivel az OENY letiltotta a közvetlen WFS hozzáférést, ez a script kiszedi a BBOX-ot a térkép hálózati kéréseiből. Alternatívaként geoshop.hu script is." />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/assets/styles.css">
@@ -40,6 +40,9 @@
         <p style="color: var(--muted); margin: 12px 0 0;">
           A <strong>userscript</strong> workaround: a térkép betöltésekor a böngésző hálózati kéréseiből automatikusan kiszedi a BBOX-ot,
           és abból épít egy letöltési linket — mintha mi sem történt volna.
+        </p>
+        <p style="color: var(--muted); margin: 12px 0 0;">
+          Van egy <a href="#geoshop">második script is a geoshop.hu-hoz</a>, ha az OENY nem elérhető.
         </p>
       </div>
     </section>
@@ -124,6 +127,62 @@
       </div>
     </section>
 
+    <section class="section-anchor" id="geoshop">
+      <h2>Alternatíva: geoshop.hu<a class="anchor-link" href="#geoshop">#</a></h2>
+      <div class="card" style="padding: 16px 20px;">
+        <p style="color: var(--muted); margin: 0;">
+          Ha az OENY nem működik, a <a href="https://geoshop.hu/" target="_blank" rel="noopener">geoshop.hu</a> térképén is ki lehet jelölni a földrészleteket.
+          A <strong>Geoshop shape-zip downloader</strong> userscript elkapja a lefedettségi választ, amit az oldal a kijelöléskor amúgy is lekér,
+          és a földrészleteket EOV shape-zip fájlba menti. Vásárlás nem kell hozzá.
+        </p>
+
+        <div class="step">
+          <span class="step-num">1</span>
+          <div class="step-body">
+            <strong>Telepítsd a scriptet</strong>
+            <p style="color: var(--muted); margin: 4px 0 0;">Tampermonkey kell hozzá (lásd fent). Kattints a gombra, és a Tampermonkey felajánlja a telepítést:</p>
+            <div style="margin-top:10px;">
+              <a class="btn" href="/Geoshop_shape-zip_downloader.user.js" target="_blank">Geoshop script telepítése</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <span class="step-num">2</span>
+          <div class="step-body">
+            <strong>Jelöld ki a területet a geoshop térképen</strong>
+            <p style="color: var(--muted); margin: 4px 0 0;">Nyisd meg a <a href="https://geoshop.hu/" target="_blank" rel="noopener">geoshop.hu</a>-t, válaszd a földrészleteket (pl. <em>Külterület</em>), és rajzolj egy poligont a térképre. A script a jobb alsó sarokban mutatja, hány földrészletet kapott el.</p>
+          </div>
+        </div>
+
+        <div class="step">
+          <span class="step-num">3</span>
+          <div class="step-body">
+            <strong>Gyűjts több kijelölésből (opcionális)</strong>
+            <p style="color: var(--muted); margin: 4px 0 0;">Ha a <strong>Gyűjtés több lekérdezésen át</strong> be van pipálva, minden új poligon hozzáadódik a listához (duplikáció nélkül). A <strong>Törlés</strong> gomb üríti a listát.</p>
+          </div>
+        </div>
+
+        <div class="step">
+          <span class="step-num">4</span>
+          <div class="step-body">
+            <strong>Töltsd le és konvertáld</strong>
+            <p style="color: var(--muted); margin: 4px 0 0;">A <strong>Shape-zip letöltése</strong> gomb egy <code>geoshop_&lt;település&gt;_&lt;időbélyeg&gt;.zip</code> fájlt ment (shp/shx/dbf/prj/cpg, EOV).
+              Attribútumok: <code>hrsz</code>, <code>telepules</code>, <code>fekves</code>, <code>terulet_m2</code>. Az <strong>EOV konverter megnyitása</strong> gomb a <a href="/shape_kml.html">Shape (EOV) → KML konvertert</a> nyitja meg.</p>
+          </div>
+        </div>
+
+        <div class="warn" style="margin-top:12px;">
+          <strong>Figyelem:</strong> a geoshop a térképen egyszerűsített (generalizált) határokat küld, ezért ezek a poligonok kevésbé pontosak, mint az OENY-ből letöltöttek. Tájékozódásra jók, pontos táblahatárhoz ellenőrizd őket.
+        </div>
+
+        <figure style="margin: 16px 0 0;">
+          <img src="/img/geoshop_1.png" alt="Geoshop shape-zip panel 150 elkapott földrészlettel a geoshop.hu térképen" class="screenshot" />
+          <figcaption style="color: var(--muted); margin-top: 10px; text-align:center;">A script panel a geoshop.hu-n — 150 földrészlet elkapva, letöltésre készen.</figcaption>
+        </figure>
+      </div>
+    </section>
+
     <section class="section-anchor">
       <h2>Technikai részletek<a class="anchor-link" href="#">#</a></h2>
       <div class="card" style="padding: 16px 20px;">
@@ -147,6 +206,7 @@
       <div class="card" style="padding: 16px 20px;">
         <p style="color: var(--muted); margin: 0 0 10px;">A teljes forráskód elérhető a repo-ban:</p>
         <a class="btn secondary" href="/OENY_HRSZ_shape-zip_downloader.user.js" target="_blank">OENY_HRSZ_shape-zip_downloader.user.js megtekintése</a>
+        <a class="btn secondary" href="/Geoshop_shape-zip_downloader.user.js" target="_blank">Geoshop_shape-zip_downloader.user.js megtekintése</a>
       </div>
     </section>
 
