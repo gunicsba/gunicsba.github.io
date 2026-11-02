@@ -42,6 +42,12 @@
             <div class="fw-tool-title">Sources</div>
             <ul class="fw-list tight">
               <li>
+                <span class="label">Universal (web page) branch:</span>
+                <a href="https://github.com/gunicsba/AgOpenGPS_Boards/tree/TM171_univ" target="_blank" rel="noopener">
+                  gunicsba/AgOpenGPS_Boards (TM171_univ)
+                </a>
+              </li>
+              <li>
                 <span class="label">Hydraulic TM171 branch:</span>
                 <a href="https://github.com/gunicsba/AgOpenGPS_Boards/tree/hydliftv2_TM171" target="_blank" rel="noopener">
                   gunicsba/AgOpenGPS_Boards (hydliftv2_TM171)
@@ -61,6 +67,25 @@
           <div class="fw-block">
             <div class="fw-block-title">Recommended (TM171)</div>
             <ul class="fw-list">
+              <li>
+                <a href="/firmwares/AIO_universal_TM171_web_02.11.2026.ino.hex">
+                  AIO universal – TM171 – web page (02.11.2026)
+                </a>
+                <span class="badge primary">TM171</span>
+                <span class="badge">web page</span>
+                <span class="badge">OTA</span>
+                <span class="badge">Keya / Allynav / FJD</span>
+                <span class="badge">newest</span>
+                <span class="hint">
+                  One firmware for every AIO board, set up on the built-in web page at http://&lt;subnet&gt;.126/:
+                  steering (hydraulic / Cytron / IBT2 / Danfoss, or a Keya, Allynav or FJD motor on CAN),
+                  John Deere FEMA input, remote input as a pulse sensor, read-only CAN SASA sensor and CNH engage button,
+                  serial ports (auto or manual), BNO085 / TM171 choice, TM171 settings and calibrations,
+                  UM982 commands (GNSS tab), firmware update over the network.
+                  Replaces the separate hydraulic / JD FEMA / Keya builds; FEMA and the motor are off until set on the web page.
+                  First install with Teensy Loader; later updates from the web page.
+                </span>
+              </li>
               <li>
                 <a href="/firmwares/Autosteer_gps_teensy_v4_1.ino_tm171_auto_KSXT_hydraulic.hex">
                   Autosteer GPS Teensy v4.1 – TM171 auto – Hydraulic/DC/Danfoss – KSXT DUAL
