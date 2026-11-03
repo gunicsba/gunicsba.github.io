@@ -29,6 +29,10 @@ firmware source (`C:\AgOpenGPS\AOG_CAN_Teensy4.1\...`) where relevant.
 | `0xA1` | `0x11 0x00 0x00 0x00 0x00 0x00 0x00` | Disengage | drops out of position control |
 | `0x01` | `<ctr> <motor_ctr_echo> 0x00` | Heartbeat, ~2s cadence | motor replies with its own heartbeat counter |
 
+The `A1` "sub-opcodes" `01/09/11/3D` are really combinations of flag bits on
+top of mode 1. The status byte `40` is also a flag bit. See *Cross-check
+against the CFX-750 firmware* below.
+
 ## Status opcodes (on `18EF1CCD`, from the motor)
 
 | Byte0 | Byte1 | Meaning |
@@ -45,8 +49,13 @@ firmware source (`C:\AgOpenGPS\AOG_CAN_Teensy4.1\...`) where relevant.
 |---|---|---|
 | `0x00` | **State machine.** `1`=idle, `3`=position control engaged, `4`=idle/ready (seen as the pre-engage default). Confirmed extensively. | dozens of traces |
 | `0x05`, `0x06` | **Disengage sensitivity pair**, written together by the CFX when you change that % setting. Both scale *down* as sensitivity % goes *up*: `20%→(19800,360)`, `25%→(18875,350)`, `35%→(17025,330)`. This is the threshold pair behind the auto-disengage fault. | 3 traces, real CFX writes |
-| `0x1B` | **Likely a position-following-error accumulator.** Normally small (~100-200), spikes to huge values (100k-1.7M+) at the exact moment of a manual wheel-override, then settles back down after the motor auto-disengages. Strong circumstantial fit for "what the disengage-sensitivity threshold is measured against." | 2 disengage traces |
-| `0x14`, `0x2A` | Polled continuously as part of the receiver's standard 4-register cycle (`0x14, 0x2A, 0x1B, 0x00`); values change during motion but meaning not decoded. | all traces |
+| `0x1B` | **Likely motor current.** The CFX firmware decodes it as `sqrt(raw) / 119` (`0x79efb4`), which reads like an I²-type value turned into amps. Normally small (~100-200 raw ≈ 0.1), it spikes to huge values (100k-1.7M+ raw ≈ 3-11) at the exact moment of a manual wheel override, then settles back after the motor auto-disengages. That fits the motor fighting the driver. The earlier "following-error accumulator" reading is probably wrong. | 2 disengage traces + firmware |
+| `0x14` | **Controller temperature, °C.** The firmware converts raw → volts (`raw / 1241.21`, i.e. a 12-bit ADC at 3.3 V) and then applies the TI LM20 sensor formula: `T = sqrt((1.8639 − V) / 3.88e-6 + 2196200) − 1481.96` (`0x79eefc`). | firmware |
+| `0x2A` | **Supply voltage, V** = `raw × 0.0088623` (`0x79ef74`), i.e. a 12-bit ADC at 3.3 V behind an ~11:1 divider. | firmware |
+
+The CFX polls these in the round-robin `0x14, 0x2A, 0x1B, 0x00`, one
+register per call on 4 of every 10 calls (`0x79ee48`). That is the same cycle
+our scripts copied.
 
 **IMPORTANT correction from earlier in this session:** registers `0x05`/`0x06`
 were originally assumed (by us) to be steering *angle/position limits*
@@ -57,6 +66,77 @@ position range. Any script still calling `write_reg(0x05, 19800)` /
 `write_reg(0x06, 360)` is actually just setting disengage sensitivity to a
 ~20%-equivalent value, which happens to be harmless, but the old comments
 calling it "limits" are incorrect and should be read as historical.
+
+## Cross-check against the CFX-750 firmware
+
+Static analysis of the CFX-750 v8.10 display firmware (see
+[ROLL_COMPENSATION_FINDINGS.md](ROLL_COMPENSATION_FINDINGS.md) for the image
+and tooling) confirms the protocol above. In the firmware the SAM200 is the
+**"CUDA"** actuator (`controls/actuators/actuator_cuda.cpp`).
+
+**`A1` byte 1 is a bitfield, not an opcode.** The command builder
+(`0x79eb90`) packs:
+
+```
+A1 <ctrl> 00 00 <value:i32 LE>
+ctrl = mode (bits 0-1, always 1) | 0x04·b | 0x08·c | 0x10·a | 0x20·d
+```
+
+| CFX method | Flags | Sent as | Matches |
+|---|---|---|---|
+| Engage (`0x700e14`) | a, b, c, d | `A1 3D 00 00 00000000` | engage step 3 |
+| Hold/sync, every 10th tick **while not engaged** (`0x70112c`) | none | `A1 01 00 00 <current pos>` | engage step 2 (the echo fix) |
+| Disengage (`0x701450`) | a | `A1 11 00 00 00000000` | disengage |
+| `SetShaftPos`, **only while engaged** (`0x70133c`) | c | `A1 09 00 00 <counts>` | the 50 Hz setpoint stream |
+
+So the CFX itself keeps sending `A1 01 <pos>` while idle. That explains why
+engaging only became reliable once we echoed the position first.
+
+**Status parsing** (`0x79f2d8` dispatches on byte 0):
+- `A1` status (`0x79e81c`): byte 1 bit 6 (`0x40`) is a flag, bytes 2-5 are
+  the **position (i32)**, and byte 7 is a separate status byte the CFX stores.
+- `A2` (`0x79e8ac`): the fault code is a u16 built from bytes 3-4. The
+  observed `0x0A` override code fits.
+- `A0` (`0x79e970`): byte 1 = read/write, u16 register, i32 value.
+- `A3` is parsed into a structure that wasn't decoded.
+
+**Counts are motor-encoder clicks, 4096 per revolution.** `SetShaftPos`
+converts degrees of motor-shaft (steering-wheel) rotation as
+
+```c
+counts = (int)(-deg * 4096.0 / 360.0);     // 11.378 counts per steering-wheel degree, sign inverted
+```
+
+The minus sign is the same direction flip we found by trial
+(`MOTOR_DIRECTION = -1`). Both the command (`A1 09`) and the feedback
+(`A1 40`) are in these clicks, relative to the zero set by `A1 3D` at engage.
+
+**How the CFX gets from wheel angle to `deg`** (base actuator `0x6fd398`):
+
+```c
+sw_deg  = theta_wheel_deg * (2*PI / AnglePerTurn);  // steering ratio from the APT calibration
+sw_deg += freeplayOffset;   // +FreeplayRight / -FreeplayLeft, applied when the commanded angle reverses
+counts  = -sw_deg * 4096 / 360;
+```
+
+So **counts per degree of wheel angle = 4096 / AnglePerTurn_deg**. At the
+firmware default of 20° per steering-wheel turn that is about **205**. The
+real value is vehicle-specific and comes from the angle-per-turn calibration.
+Above 2 m/s a small speed- and rate-dependent extra term (logged as
+`valveDeadBand`) is also added; it wasn't decoded further.
+
+**Disengage-sensitivity formula** (`0x700f50`):
+
+```c
+r     = 100 - pct;          // pct clamped to <= 100
+reg05 = r * 185 + 5000;     // asserted <= 23500
+reg06 = r * 2   + 200;      // asserted <= 400
+```
+
+This reproduces all three captured pairs exactly: 20% → 19800/360,
+25% → 18875/350, 35% → 17025/330. Because `0x1B` looks like a current value,
+reg `0x05` is most likely the current threshold and reg `0x06` probably a
+time or filter length (unconfirmed).
 
 ## The engage sequence (validated fix)
 
@@ -151,16 +231,22 @@ integrates `pwmDrive` into a running position target and sends it as `A1 09`.
 
 ## Open questions / unconfirmed
 
-- **Counts-per-degree scale**: still unknown. No captured trace shows the
-  motor actually being driven to a known real-world angle (the max-angle
-  traces never engaged autosteer). The bridge's `COUNTS_PER_DEGREE` constant
-  is a placeholder pending a real calibration trace.
+- **Counts-per-degree scale**: *resolved from the firmware* — 4096 counts per
+  steering-wheel revolution, so `4096 / AnglePerTurn_deg` counts per degree of
+  wheel angle (about 205 at the default 20°/turn). Still needed: the
+  AnglePerTurn of the actual test tractor (run the CFX's APT calibration, or
+  measure the wheel angle for a known number of steering-wheel turns). The
+  bridge's `COUNTS_PER_DEGREE = 550` was a guess and is probably about 2.7×
+  too high.
 - **`A3` current/torque candidate**: bytes 1-4 are a plausible but unproven
   current/torque channel. Would need a deliberate load test (resist the
   wheel while engaged, watch if these fields scale with resistance) to
   confirm before trusting it.
-- **Registers `0x14`, `0x2A`**: read every cycle by both the CFX and our own
-  scripts, values change during motion, meaning not decoded.
+- **Registers `0x14`, `0x2A`, `0x1B`**: decoded from the firmware
+  (temperature, supply voltage, likely motor current; see the register
+  table). They are not yet checked against live values.
+- **Meaning of reg `0x06`** in the disengage pair: the formula is known, the
+  unit isn't.
 - **`reg00` full state table**: only `1`, `3`, `4` observed and partially
   understood (`3`=engaged, `1`/`4`=not engaged in two apparently different
   idle flavors — the distinction between them, if any, isn't nailed down).
